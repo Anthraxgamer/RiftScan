@@ -18,15 +18,17 @@
     .cameraQuick{margin-top:10px}.cameraQuick button{flex:1}.focusStatus{font-size:12px;color:#9be9d2;min-height:1.5em;overflow-wrap:anywhere}
     @media(max-width:599px){main{padding:12px 8px 32px}section{padding:9px}.cameraWorkspace{gap:6px;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}#cameraPanel{padding:7px;gap:8px}#cameraPanel h2{font-size:14px}#cameraPanel label,#cameraPanel .mono,#cameraPanel .foot{font-size:11px}#cameraPanel button,#cameraPanel select{font-size:12px;padding:7px 5px}#cameraPanel .row{display:grid;grid-template-columns:minmax(0,1fr);gap:5px}.target span{font-size:7px;padding:1px 2px}.cameraQuick button{font-size:13px;padding:8px 5px}.empty{font-size:12px}}
     @media(orientation:landscape) and (max-height:550px){.cameraWorkspace{--camera-height:clamp(155px,58dvh,300px)}}
+   .ocrPanel{border:1px solid #40516a;border-radius:10px;padding:9px;margin-bottom:10px;overflow-wrap:anywhere}.ocrPanel canvas{max-height:125px;object-fit:contain;margin-top:5px}.ocrPanel .foot{margin-top:4px}.guide[data-scan="reading"]{border-color:#438cf5}.guide[data-scan="uncertain"]{border-color:#f6d58a}.guide[data-scan="saved"]{border-color:#75e1bf}.guide[data-scan="idle"]{border-color:#a4b0c0}
   </style>
   <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
   <script defer src="core.js"></script>
   <script defer src="app.js"></script>
   <script defer src="camera-v03.js?v=03"></script>
+  <script defer src="recognition-v04.js?v=04"></script>
 </head>
 <body>
 <main>
-  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.2 · camera lab</span></header>
+  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.4 · recognition lab</span></header>
   <div class="layout">
     <div>
       <section id="scannerSection">
@@ -38,14 +40,14 @@
           </div>
           <section class="cameraControls" id="cameraPanel" aria-label="Camera settings">
             <h2>Camera settings</h2>
-            <p class="foot">Scroll this panel only. The camera stays visible.</p>
+            <p class="foot">Settings apply automatically. Scroll this panel only.</p>
             <p class="mono" id="cameraInfo">Start camera to inspect actual settings.</p>
             <p class="muted" id="cameraMessage" role="status"></p>
             <label>Quality preset<select id="profile"><option value="auto">Automatic · recommended</option><option value="max">Maximum clarity</option><option value="performance">Performance</option><option value="custom">Custom</option></select></label>
             <label>Camera source<select id="cameraSource"><option value="">Automatic rear camera</option></select></label>
             <label>Requested resolution<select id="resolution"><option value="auto">Automatic</option><option value="3840">4K</option><option value="2560">1440p</option><option value="1920">1080p</option><option value="1280">720p</option><option value="640">480p</option></select></label>
             <label>Requested frame rate<select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select></label>
-            <div class="row"><button id="applyCamera">Apply camera settings</button><button id="resetCamera">Reset defaults</button></div>
+            <div class="row"><button id="resetCamera">Reset defaults</button></div>
             <label id="zoomRow" hidden>Camera zoom <output id="zoomValue"></output><input type="range" id="zoom"></label>
             <label id="focusRow" hidden>Focus mode<select id="focusMode"></select></label>
             <label id="distanceRow" hidden>Manual focus distance <output id="distanceValue"></output><input type="range" id="focusDistance"></label>
@@ -56,8 +58,10 @@
           </section>
         </div>
         <div class="row cameraQuick"><button id="autofocus" disabled>Auto focus</button><button id="toggleCameraPanel" aria-expanded="true" aria-controls="cameraPanel">Hide settings</button></div>
+        <div class="row cameraQuick"><button id="applyCamera">Apply / restart camera</button><button id="scanToggleV4" disabled>Pause scanning</button></div>
         <p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
         <div class="status" id="status" role="status">Camera off.</div>
+        <div id="liveOCR" class="ocrPanel"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Foil score is experimental, not a probability.</p></div>
         <div class="row"><button class="primary grow" id="start">Start camera</button><button id="stop" disabled>Stop</button><button id="torch" disabled>Light</button></div>
         <div class="row" style="margin-top:10px"><button id="next" class="grow" disabled>Ready for next card</button><label><input type="checkbox" id="sound" checked style="width:auto"> Sound</label></div>
         <p class="foot">Keep the card upright and fill the outline. Remove it fully before showing an identical copy. Use Ready for next card only after physically replacing it.</p>
@@ -68,7 +72,7 @@
         <label>Set codes (comma-separated)<input id="sets" value="OGN,SFD,RAD" autocapitalize="characters"></label>
         <label>Minimum OCR confidence <span id="thresholdValue">65</span>%<input type="range" min="40" max="90" value="65" id="threshold"></label>
         <label>Consistent readings<select id="reads"><option value="2">2 · recommended</option><option value="3">3 · cautious</option><option value="1">1 · faster, less reliable</option></select></label>
-        <details><summary>Debug information</summary><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><p class="foot">Foil score is an uncalibrated reflection-change heuristic, not a probability.</p></details>
+        <p class="foot">Live OCR diagnostics are directly beneath the camera.</p>
       </section>
     </div>
     <div>
