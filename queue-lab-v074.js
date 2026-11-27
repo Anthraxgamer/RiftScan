@@ -125,10 +125,10 @@ async function detect(){
  }catch(e){$('detect').textContent='Detection unavailable: '+e.message;}
  finally{detectBusy=false;}
 }
-function makeVariant(raw,invert){
+function makeVariant(raw,invert,enhance){
  const w=Math.min(1200,Math.max(750,raw.width*2)),h=Math.max(1,Math.round(w*raw.height/raw.width));
  const c=canvas(w+48,h+48),g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(raw,24,24,w,h);
- const im=g.getImageData(24,24,w,h);for(let i=0;i<im.data.length;i+=4){let x=.299*im.data[i]+.587*im.data[i+1]+.114*im.data[i+2];x=Math.max(0,Math.min(255,(x-128)*1.45+128));if(invert)x=255-x;im.data[i]=im.data[i+1]=im.data[i+2]=x;}g.putImageData(im,24,24);return c;
+ const im=g.getImageData(24,24,w,h);for(let i=0;i<im.data.length;i+=4){let x=.299*im.data[i]+.587*im.data[i+1]+.114*im.data[i+2];if(enhance)x=Math.max(0,Math.min(255,(x-128)*1.45+128));if(invert)x=255-x;im.data[i]=im.data[i+1]=im.data[i+2]=x;}g.putImageData(im,24,24);return c;
 }
 async function getWorker(){
  if(worker)return worker;
@@ -142,9 +142,9 @@ async function recognize(job,w){
  for(const [i,image] of job.images.entries()){
   const raw=await createImageBitmap(image);
   try{
-   for(const mode of [{invert:true,psm:'11'},{invert:true,psm:'7'}]){
+   for(const mode of [{invert:true,enhance:false,psm:'11'},{invert:true,enhance:true,psm:'7'}]){
     await w.setParameters({tessedit_pageseg_mode:mode.psm});
-    const r=await w.recognize(makeVariant(raw,mode.invert)),d=r.data,p=C.parse(d.text,job.settings.sets),confidence=Number(d.confidence)||0;
+    const r=await w.recognize(makeVariant(raw,mode.invert,mode.enhance)),d=r.data,p=C.parse(d.text,job.settings.sets),confidence=Number(d.confidence)||0;
     reads.push({frame:i,key:p?p.set+' '+p.num+'/'+p.den:null,parsed:p,text:d.text,confidence,threshold:job.settings.threshold,method:mode.psm});
     if(p&&confidence>=job.settings.threshold)break;
    }
@@ -170,11 +170,11 @@ async function pump(){
 }
 function button(label,action){const b=document.createElement('button');b.textContent=label;b.onclick=action;return b;}
 async function refresh(){
- jobs=await Q.list(db);const n=Q.counts(jobs);$('stats').textContent=jobs.length+' captured · '+n.queued+' queued · '+n.processing+' processing · '+n.saved+' IDs saved · '+n.review+' ID review';
+ jobs=await Q.list(db);const n=Q.counts(jobs);$('stats').textContent=jobs.length+' captured · '+n.queued+' queued · '+n.processing+' processing · '+n.saved+' IDs saved · '+n.review+' ID review · '+jobs.filter(j=>j.state==='discarded').length+' discarded';
  const list=$('jobs');list.replaceChildren();
  for(const j of [...jobs].reverse()){
   const a=document.createElement('article'),p=document.createElement('p');p.textContent='#'+j.id.slice(0,8)+' · '+j.state.toUpperCase()+(j.result?' · '+j.result.set+' '+j.result.num:'')+' · '+(j.note||'');a.append(p);
-  if(j.state==='review'||j.state==='saved')a.append(button('View / review',()=>openReview(j.id)));list.append(a);
+  if(j.state==='review'||j.state==='saved')a.append(button('View / review',()=>openReview(j.id)));if(j.state==='review')a.append(button('Discard false capture',async()=>{if(!confirm('Mark this capture as not a card? It will remain in the audit log.'))return;try{await Q.finish(db,j.id,'review',{state:'discarded',note:'User marked false capture'});await refresh();void pump();}catch(e){state(e.message);}}));list.append(a);
  }
  controls();
 }
@@ -208,7 +208,7 @@ async function init(){
  try{await navigator.locks.request('riftscan-queue-lab-v1',{ifAvailable:true},async lock=>{
   if(!lock){state('Queue Lab is open in another tab. Close it and reload.');return;}
   db=await Q.open();const recovered=await Q.restore(db);await refresh();state('Local queue ready. '+recovered+' interrupted jobs restored.');controls();void pump();
-  await new Promise(resolve=>{releaseLock=resolve;});
+  if(!active){db.close();return;}await new Promise(resolve=>{releaseLock=resolve;});db.close();
  });}catch(e){state('Queue storage unavailable: '+e.message);db=null;controls();}
 }
 void init();
