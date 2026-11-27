@@ -17,10 +17,34 @@ function vote(reads,needed=2){
 function recover(jobs){return jobs.filter(j=>j.state==='processing').map(j=>({...j,state:'queued',note:'Recovered interrupted processing'}));}
 function counts(jobs){const n={queued:0,processing:0,review:0,saved:0};for(const j of jobs)if(j.state in n)n[j.state]++;return n;}
 function meanDiff(a,b){if(!a||!b||a.length!==b.length||!a.length)return Infinity;let d=0;for(let i=0;i<a.length;i++)d+=Math.abs(a[i]-b[i]);return d/a.length;}
+// Allow moderate uniform exposure changes, but not arbitrary changes of texture.
+function exposureDiff(a,b){
+ if(!a||!b||a.length!==b.length||!a.length)return {raw:Infinity,residual:Infinity,offset:Infinity};
+ let sum=0;for(let i=0;i<a.length;i++)sum+=b[i]-a[i];
+ const offset=sum/a.length;let residual=0;
+ for(let i=0;i<a.length;i++)residual+=Math.abs(b[i]-a[i]-offset);
+ return {raw:meanDiff(a,b),residual:residual/a.length,offset:Math.abs(offset)};
+}
 function presence(base,sample,previous){
- const art=meanDiff(base?.art,sample.art),id=meanDiff(base?.id,sample.id);
+ const a=exposureDiff(base?.art,sample.art),i=exposureDiff(base?.id,sample.id);
+ const near=(d,raw,residual)=>d.raw<raw||(d.offset<=35&&d.residual<residual);
+ const empty=near(a,12,9)&&near(i,10,8);
  const stable=!!previous&&meanDiff(previous.art,sample.art)<9&&meanDiff(previous.id,sample.id)<12;
- return {present:art>15&&id>10,empty:art<9&&id<7,stable,art,id};
+ const present=!empty&&(a.residual>12||a.raw>22)&&(i.residual>9||i.raw>17);
+ return {present,empty,stable,art:a.raw,id:i.raw,artResidual:a.residual,idResidual:i.residual};
+}
+function departure(anchor,sample){
+ if(!anchor)return false;
+ const a=exposureDiff(anchor.art,sample.art),i=exposureDiff(anchor.id,sample.id);
+ return a.residual>12||i.residual>12||a.raw>40||i.raw>40;
+}
+// Require distinct fresh samples and a sustained empty gap. No OCR dependency.
+function emptyProgress(old,p,departed,now,stamp){
+ if(old&&old.stamp===stamp)return old;
+ if(!p.empty||!departed)return {count:0,since:now,last:now,stamp,ready:false};
+ const contiguous=old&&old.count>0&&now-old.last<=650;
+ const count=contiguous?old.count+1:1,since=contiguous?old.since:now;
+ return {count,since,last:now,stamp,ready:count>=3&&now-since>=200};
 }
 function open(){
  return new Promise((resolve,reject)=>{
@@ -51,6 +75,6 @@ function finish(db,id,expected,patch){
   };
  });
 }
-const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,presence,open,list,enqueue,restore,claim,finish};
+const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,open,list,enqueue,restore,claim,finish};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RiftQueue=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
