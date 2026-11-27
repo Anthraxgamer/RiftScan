@@ -48,9 +48,9 @@
 </style>
 <script defer="" src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
 <script defer="" src="core.js"></script>
-<script defer="" src="app.js?v=05"></script>
-<script defer="" src="camera-v03.js?v=03"></script>
-<script defer="" src="recognition-v05.js?v=05"></script>
+<script defer="" src="app.js?v=0732"></script>
+<script defer="" src="camera-v03.js?v=0732"></script>
+<script defer="" src="recognition-v05.js?v=0732"></script>
 <script defer="" src="best-frame-v055.js?v=0731"></script>
 <script defer="" src="mobile-v06.js?v=0731"></script>
 <script defer="" src="tracker-v07.js?v=072"></script>
@@ -69,7 +69,14 @@ body.immersiveActive073{overflow:hidden;overscroll-behavior:none}
 .immersive073 #scanBottom073.expanded073{height:min(62dvh,480px);z-index:6}.immersive073 #scanBottom073.expanded073 #collectionPanel{background:#101620f2}
 @media(orientation:landscape) and (min-width:600px){.immersive073 #scanBottom073{left:auto;width:clamp(230px,28vw,350px);height:clamp(170px,65dvh,300px)}.immersive073 #view[data-calibrating=true]~#cameraPanel{left:auto;width:clamp(230px,28vw,350px);height:clamp(170px,65dvh,300px)}.immersive073 #scanBottom073.expanded073{height:min(75dvh,480px)}}
 #captureDiag0731{position:absolute;top:100%;left:0;right:0;text-align:center;font-size:10px;line-height:1.2;color:#fff;background:#101620b8;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;pointer-events:none}
-</style><script defer="" src="immersive-v073.js?v=0732"></script></head>
+</style><script defer="" src="immersive-v073.js?v=0732b"></script><style>
+/* V0.7.3.2: deliberate touch controls. Original range fields remain for script compatibility. */
+.stepper0732{display:grid;grid-template-columns:minmax(44px,1fr) minmax(54px,1.3fr) minmax(44px,1fr);gap:8px;align-items:center;margin:6px 0 12px;touch-action:pan-y}
+.stepper0732 button{min-height:44px!important;min-width:44px;font-size:20px!important;line-height:1;padding:8px!important;touch-action:pan-y;user-select:none}
+.stepper0732 output{font:600 15px/1.4 system-ui,sans-serif;text-align:center;color:#edf1f6!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+input[type=range][hidden]{display:none!important}
+#captureDiag0731{white-space:normal;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-height:32px}
+</style></head>
 <body>
 <main>
 <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7.3.2 · loading</span></header>
