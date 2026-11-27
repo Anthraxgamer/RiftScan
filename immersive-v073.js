@@ -80,7 +80,7 @@ function tick(){
    const now=performance.now();
    if(focusMessage!==focusLast){focusLast=focusMessage;focusUntil=now+8000;}
    if(typeof adjusting!=='undefined'&&adjusting&&/^Focusing/.test($('autofocus').textContent))focusUntil=now+8000;
-   if(focusMessage&&(now<focusUntil||/autofocus control not exposed|does not expose autofocus control/i.test(focusMessage)))text='Focus: '+focusMessage;
+   if(focusMessage&&(now<focusUntil||/autofocus control not exposed|does not expose autofocus control|No autofocus mode exposed/i.test(focusMessage)))text='Focus: '+focusMessage;
    diag.title=text;
    if(diag.textContent!==text)diag.textContent=text;}
  q.textContent=typeof paused!=='undefined'&&paused?'Resume':'Pause';
@@ -88,5 +88,5 @@ function tick(){
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.2 · focus & touch controls';
+$('versionTag').textContent='V0.7.3.3 · focus recovery';
 })();
