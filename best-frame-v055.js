@@ -42,7 +42,7 @@
     }
     let best=newest;
     for(const f of eligible)if(f.quality.score>best.quality.score)best=f;
-    return {best,eligible:eligible.length};
+    return {best,eligible:eligible.length,frames:eligible};
   }
   // Confirmation memory contains actual prior accepted readings only. A miss never increments it.
   function canRetain(memory,current,now,limits={maxAge:8000,maxMisses:2,maxDifference:12}){
@@ -50,7 +50,15 @@
       now-memory.at<=limits.maxAge&&memory.misses<=limits.maxMisses&&
       difference(memory.quality,current.quality)<=limits.maxDifference;
   }
-  if(typeof module!=='undefined'&&module.exports){module.exports={metrics,difference,choose,canRetain};return;}
+
+  // Each vote comes from a distinct camera frame, never a repeated OCR variant.
+  function decide(reads,needed){
+    const valid=reads.filter(r=>r.key&&r.accepted);
+    const keys=new Set(valid.map(r=>r.key));
+    if(keys.size!==1||valid.length<needed)return {accepted:false,count:valid.length,conflict:keys.size>1};
+    return {accepted:true,count:valid.length,key:valid[0].key,conflict:false};
+  }
+  if(typeof module!=='undefined'&&module.exports){module.exports={metrics,difference,choose,canRetain,decide};return;}
   const existingInfo=document.getElementById('bestFrameV055');
   const existingToggle=document.getElementById('bestFrameEnabled');
   const version=document.getElementById('versionTag');
@@ -71,19 +79,17 @@
   const ui=root.RiftCapture0731={phase:'idle',detail:'Waiting for camera',frames:0,submitted:0,skipped:0};
   function phase(name,detail){Object.assign(ui,{phase:name,detail,frames:captures,submitted,skipped});}
   let cropProblem='';
-  const retain=document.getElementById('retainV06'),retainInfo=document.getElementById('retainInfoV06');
+  const retain=document.getElementById('retainV06');
+  if(retain){retain.checked=false;retain.disabled=true;}
   const hasCandidate=typeof candidate!=='undefined'&&typeof locked!=='undefined'&&typeof C!=='undefined';
-  let memory=null,lastAccepted=null;
-  const clearMemory=()=>{memory=null;lastAccepted=null;};
-  const retentionOn=()=>!!retain?.checked&&hasCandidate;
-  if(retain&&!hasCandidate){retain.checked=false;retain.disabled=true;if(retainInfo)retainInfo.textContent='Retention unavailable: scanner interface not recognized.';}
+  let blocked=null;
   const session=t=>`${t.id}:${t.epoch}:${t.generation}`;
-  const context=(t,quality)=>({session:session(t),lock:hasCandidate?locked:null,quality});
-  const retentionNote=msg=>{if(retainInfo)retainInfo.textContent=msg;};
-  for(const id of ['sets','threshold','reads','mode','retainV06'])document.getElementById(id)?.addEventListener('change',clearMemory);
-  document.addEventListener?.('visibilitychange',clearMemory);
-  document.getElementById('next')?.addEventListener('click',()=>{generation++;clearMemory();},true);
-  enabled.addEventListener?.('change',()=>{generation++;clearMemory();note(enabled.checked?'Best-frame enabled':'Original recognition enabled');});
+  function retry(){generation++;blocked=null;if(hasCandidate)candidate=null;phase('waiting','Ready for a fresh capture');}
+  ui.retry=retry;
+  for(const id of ['sets','threshold','reads','mode'])document.getElementById(id)?.addEventListener('change',retry);
+  document.addEventListener?.('visibilitychange',retry);
+  document.getElementById('next')?.addEventListener('click',retry,true);
+  enabled.addEventListener?.('change',()=>{retry();note(enabled.checked?'Frozen capture enabled':'Original recognition enabled');});
   const note=s=>{info.textContent=`${s} · ${captures} frames / ${submitted} OCR batches / ${skipped} skipped`;};
   const invalidReason=t=>{
     if(t.id!==run||!stream)return 'Camera session ended';
@@ -94,7 +100,7 @@
     return '';
   };
   const valid=t=>!invalidReason(t);
-  const cancel=(t,stage)=>{clearMemory();phase('waiting',stage+' cancelled: '+(invalidReason(t)||'capture state changed'));return empty();};
+  const cancel=(t,stage)=>{phase('waiting',stage+' cancelled: '+(invalidReason(t)||'capture state changed'));return empty();};
   const empty=()=>({data:{text:'',confidence:0}});
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function snapshot(){
@@ -118,7 +124,7 @@
       const time=Number.isFinite(video.currentTime)?video.currentTime:null;
       const stamp=time!==null||count>0?`${time}:${count}`:null;
       if(video.readyState>=2&&stamp!==null&&stamp!==last){
-        last=stamp;const f=snapshot();if(f){frames.push(f);captures++;phase('capturing',`${frames.length}/4 frames captured`);}
+        last=stamp;const f=snapshot();if(f){f.foil=typeof frame==='function'?frame():null;frames.push(f);captures++;phase('capturing',`${frames.length}/4 frames captured`);}
       }
       if(frames.length<4)await sleep(70);
     }
@@ -127,7 +133,7 @@
   // Only the automatic loop calls prepare() without arguments while recognizing.
   // Explicit photo captures and other diagnostic calls use the existing path.
   prepare=function(...args){
-    if(!enabled.checked||args.length||!recognizing||paused||adjusting||!stream){clearMemory();return priorPrepare.apply(this,args);}
+    if(!enabled.checked||args.length||!recognizing||paused||adjusting||!stream){return priorPrepare.apply(this,args);}
     // V0.5 may preload or rewrap its worker asynchronously. Attach to its latest method.
     if(typeof worker!=='undefined'&&worker)wrap(worker);
     const token=canvas(1,1);tokens.set(token,{id:run,epoch:cameraEpoch,generation});return token;
@@ -138,48 +144,75 @@
     const wrappedRead=async function(input,...args){
       const t=tokens.get(input);if(!t)return read(input,...args);
       tokens.delete(input);if(!valid(t))return cancel(t,'Capture');
-      if(root.RiftTrackerV07){t.tracker=root.RiftTrackerV07.begin();if(!t.tracker){clearMemory();const held=hasCandidate&&!!locked;phase(held?'held':'waiting',held?'Tracker waiting for card replacement or alignment':'Tracker aligning first card');return empty();}if(!valid(t))return cancel(t,'Capture');}
-      // The base loop has already processed the previous result by the time this batch begins.
-      // Capture its genuine candidate before an unreadable result clears it.
-      if(retentionOn()&&lastAccepted&&candidate?.k===lastAccepted.key&&Number.isInteger(candidate.n)&&candidate.n>0&&candidate.k!==locked&&lastAccepted.session===session(t)&&lastAccepted.lock===locked){
-        if(!memory||memory.key!==candidate.k||candidate.n>memory.candidate.n){memory={...lastAccepted,candidate:{...candidate},misses:0};}
-      }else if(!retentionOn()||lastAccepted&&(lastAccepted.session!==session(t)||lastAccepted.lock!==locked||lastAccepted.key===locked))clearMemory();
-      batches++;const started=performance.now();note('Collecting four frames…');phase('capturing','0/4 frames captured');
+      // Keep the last unsuccessful batch visible. Only an explicit retry or a
+      // sustained, meaningfully different crop opens another batch.
+      if(blocked&&blocked.session===session(t)&&blocked.lock===locked){
+        const now=performance.now();
+        if(now-blocked.checkedAt>=300){
+          blocked.checkedAt=now;const live=snapshot();
+          if(live&&difference(blocked.quality,live.quality)>24){
+            blocked.streak=blocked.previous&&difference(blocked.previous,live.quality)<=12?blocked.streak+1:1;
+            blocked.previous=live.quality;
+          }else{blocked.streak=0;blocked.previous=null;}
+          if(blocked.streak>=3)blocked=null;
+        }
+        if(blocked){phase('retry',blocked.detail);return {data:{text:'',confidence:0,riftscanIdle:true}};}
+      }else blocked=null;
+      if(root.RiftTrackerV07){
+        t.tracker=root.RiftTrackerV07.begin();
+        if(!t.tracker){const held=hasCandidate&&!!locked;phase(held?'held':'waiting',held?'Tracker waiting for card replacement or alignment':'Tracker aligning first card');return {data:{text:'',confidence:0,riftscanIdle:true}};}
+        if(!valid(t))return cancel(t,'Capture');
+      }
+      batches++;const started=performance.now();note('Collecting up to four frames once…');phase('capturing','0/4 frames captured');
       const frames=await capture(t);if(!valid(t))return cancel(t,'Capture');
       const selection=choose(frames);
-      // Prefer four frames; after the deadline, accept two or more agreeing distinct samples.
-      if(!selection||selection.eligible<2||selection.best.quality.score<1.5){clearMemory();skipped++;
-        const reason=cropProblem|| (frames.length<2?'Waiting for new camera frames':selection?.eligible<2?'ID crop moving or changing':'ID crop lacks detail');
-        note(`${reason} (${frames.length}/4, ${selection?.eligible||0} stable)`);phase('waiting',reason);return empty();}
-      const {best,eligible}=selection;
-      const current=context(t,best.quality);
-      // Require all four sampled frames to agree with the retained anchor. If the card
-      // appears to have changed, never carry forward recognition evidence.
-      if(memory&&(!canRetain(memory,current,performance.now())||eligible!==4||frames.some(f=>difference(memory.quality,f.quality)>12)))clearMemory();
-      let prepared;try{prepared=priorPrepare(best.image,[0,0,best.image.width,best.image.height]);}catch(e){phase('error','Image preparation error: '+e.message);throw e;}
-      submitted++;phase('reading',`OCR batch ${submitted} · ${eligible}/${frames.length} stable frames`);note(`Batch ${batches}: selected frame ${frames.indexOf(best)+1}/4 · quality ${best.quality.score.toFixed(1)} · ${eligible} stable · ${Math.round(performance.now()-started)}ms capture`);
-      // Retain the existing OCR worker, preprocessing fallbacks, confidence and save/duplicate rules.
-      let result;try{result=await read(prepared,...args);}catch(e){phase('error','OCR error: '+e.message);throw e;}
+      if(!selection||selection.best.quality.score<1.5){
+        skipped++;const reason=cropProblem||(!frames.length?'Waiting for new camera frames':'ID crop lacks detail');
+        note(reason);phase('waiting',reason);return empty();
+      }
+      // A single sharp image gets OCR too. Do not demand two stable frames to
+      // start OCR; the configured number of genuine matching reads still applies.
+      const pool=selection.frames.filter(f=>f.quality.score>=1.5).sort((a,b)=>b.quality.score-a.quality.score);
+      const sets=document.getElementById('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean);
+      const threshold=Number(document.getElementById('threshold').value);
+      const needed=Math.max(1,Math.min(3,Number(document.getElementById('reads').value)||2));
+      const reads=[];let best=null,bestScore=-Infinity,bestPreview=null,bestTrace='';
+      submitted++;
+      for(const [i,f] of pool.entries()){
+        if(!valid(t))return cancel(t,'OCR');
+        phase('reading',`OCR frozen image ${i+1}/${pool.length} · batch ${submitted}`);
+        let result;
+        try{
+          const prepared=priorPrepare(f.image,[0,0,f.image.width,f.image.height]);
+          result=await read(prepared,...args);
+        }catch(e){if(!valid(t))return cancel(t,'OCR');phase('error','OCR error: '+e.message);throw e;}
+        if(!valid(t))return cancel(t,'OCR');
+        const data=result?.data||{}, p=C.parse(data.text||'',sets), conf=Number(data.confidence)||0;
+        const vote={result,frame:f,key:p?p.set+' '+p.num+'/'+p.den:null,accepted:!!p&&conf>=threshold};
+        reads.push(vote);
+        const score=(vote.key?1000:0)+conf;
+        if(score>bestScore){bestScore=score;best=vote;const pv=document.getElementById('cropPreview');if(pv?.width&&pv?.height){bestPreview=canvas(pv.width,pv.height);bestPreview.getContext('2d').drawImage(pv,0,0);}bestTrace=document.getElementById('ocrMethods')?.textContent||'';}
+        const verdict=decide(reads,needed);if(verdict.accepted||verdict.conflict)break;
+      }
+      const verdict=decide(reads,needed);
       if(!valid(t))return cancel(t,'OCR');
-      // Initial reads are not gated by artwork. Still reject a stale ID crop, including
-      // when confirmation memory is disabled. Compare against the frozen best frame.
-      if(t.tracker?.phase==='initial'){const live=snapshot();if(!live||difference(best.quality,live.quality)>12){clearMemory();phase('waiting','ID crop changed during OCR');return empty();}}
-      if(retentionOn()){
-        const data=result?.data||{},sets=document.getElementById('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean),p=C.parse(data.text||'',sets),confidence=Number(data.confidence)||0;
-        const k=p&&confidence>=Number(document.getElementById('threshold').value)?p.set+' '+p.num:null;
-        // Check the live crop after OCR as well, only for evidence retention. An actual
-        // save still follows the base scanner's rules. No synthetic OCR result is created.
-        const live=snapshot();
-        if(!live||difference(best.quality,live.quality)>12){clearMemory();if(t.tracker&&!t.tracker.bypass){phase('waiting','ID crop changed during OCR');return empty();}}
-        else if(k){
-          if(memory&&memory.key===k&&k!==locked&&memory.misses>0&&canRetain(memory,current,performance.now())&&(!candidate||candidate.k===k&&candidate.n<memory.candidate.n)){
-            try{candidate={...memory.candidate};retentionNote(`Retained ${candidate.n} prior matching read(s) for ${k} across ${memory.misses} miss(es).`);}catch(_){clearMemory();}
-          }else if(memory&&memory.key!==k)clearMemory();
-          lastAccepted={...current,key:k,at:performance.now()};memory=null;
-        }else if(memory){memory.misses++;if(!canRetain(memory,current,performance.now()))clearMemory();else retentionNote(`Holding ${memory.candidate.n} prior matching read(s) · ${memory.misses}/2 misses · ${memory.key}.`);}
-        else lastAccepted=null;
-      }else clearMemory();
-      phase('complete',`OCR returned · confidence ${Math.round(Number(result?.data?.confidence)||0)}%`);return result;
+      // Verify the physical card once, after processing the frozen images.
+      const live=snapshot();
+      const comparison=verdict.accepted?reads.filter(r=>r.accepted&&r.key===verdict.key).map(r=>r.frame):[selection.best];
+      if(!live||!comparison.some(f=>difference(f.quality,live.quality)<=20)){phase('waiting','Card changed during OCR; align again');return empty();}
+      if(bestPreview){const pv=document.getElementById('cropPreview');pv.width=bestPreview.width;pv.height=bestPreview.height;pv.getContext('2d').drawImage(bestPreview,0,0);}
+      const methods=document.getElementById('ocrMethods');if(methods)methods.textContent=bestTrace;
+      if(verdict.accepted){
+        const winner=reads.filter(r=>r.accepted&&r.key===verdict.key).sort((a,b)=>Number(b.result.data.confidence)-Number(a.result.data.confidence))[0];
+        if(typeof history!=='undefined')history=selection.frames.slice().reverse().filter(f=>f.foil).map(f=>f.foil);
+        note(`Frozen batch confirmed · ${verdict.count}/${needed} matching images · ${Math.round(performance.now()-started)}ms`);
+        phase('complete',`Confirmed ${verdict.count}/${needed} matching reads`);
+        return {...winner.result,data:{...winner.result.data,riftscanVotes:verdict.count}};
+      }
+      const detail=verdict.conflict?'Conflicting collector IDs · retry capture':`Image retained · ${verdict.count}/${needed} matching reads · retry capture`;
+      blocked={session:session(t),lock:locked,quality:selection.best.quality,detail,checkedAt:performance.now(),streak:0,previous:null};
+      skipped++;note(detail);phase('retry',detail);
+      return {data:{...(best?.result?.data||{text:'',confidence:0}),riftscanRejected:true}};
     };w.recognize=wrappedRead;wrapped.set(w,wrappedRead);return w;
   }
   getWorker=async function(...args){return wrap(await priorGetWorker.apply(this,args));};

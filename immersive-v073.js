@@ -29,7 +29,7 @@ document.addEventListener('fullscreenchange',()=>{if(!active||closing)return;if(
 document.addEventListener('click',e=>{if(e.target===toggle||toggle.contains(e.target))setTimeout(()=>{if(active&&!settings.hidden){pauseIfRunning();setExpanded(false);}refresh();});},true);
 $('calibrateV071').addEventListener('click',()=>setTimeout(()=>{pauseIfRunning();setExpanded(false);refresh();}),true);
 $('quickPause073').addEventListener('click',()=>{if(!settings.hidden)closeSettings();setExpanded(false);$('scanToggleV4').click();});
-$('quickNext073').addEventListener('click',()=>$('next').click());
+$('quickNext073').addEventListener('click',()=>{const c=globalThis.RiftCapture0731;if($('bestFrameEnabled')?.checked&&c?.phase==='retry'){c.retry();return;}$('next').click();});
 $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeSettings();setExpanded(!bottom.classList.contains('expanded073'));});
 
  // Keep the original range input and its event handlers, but remove touch-to-jump.
@@ -75,7 +75,7 @@ $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeS
 function tick(){
  for(const sync of rangeControls)sync();
  if(!active)return;
- const p=$('scanToggleV4'),q=$('quickPause073'),n=$('quickNext073');q.disabled=p.disabled;n.disabled=$('next').disabled;
+ const p=$('scanToggleV4'),q=$('quickPause073'),n=$('quickNext073');q.disabled=p.disabled;n.disabled=$('next').disabled;const retry=$('bestFrameEnabled')?.checked&&globalThis.RiftCapture0731?.phase==='retry';if(n.textContent!==(retry?'Retry capture':'Next card'))n.textContent=retry?'Retry capture':'Next card';
  const diag=$('captureDiag0731'),capture=globalThis.RiftCapture0731;if(diag){let text=capture&&$('bestFrameEnabled')?.checked?`${capture.detail} · ${capture.submitted} OCR / ${capture.skipped} skipped`:$('status').textContent; const focusMessage=$('focusStatus')?.textContent.trim()||'';
    const now=performance.now();
    if(focusMessage!==focusLast){focusLast=focusMessage;focusUntil=now+8000;}
@@ -88,5 +88,5 @@ function tick(){
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.6 · first-card recovery';
+$('versionTag').textContent='V0.7.3.7 · frozen capture';
 })();
