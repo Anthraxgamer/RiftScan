@@ -49,7 +49,7 @@ let session=null,sessionRun=null,seenLock=null,lastStamp=null,lastD=null,lastRec
 const active=()=>enabled.checked&&el('bestFrameEnabled')?.checked&&!!stream&&!paused&&!adjusting&&!document.hidden;
 function say(s){if(info.textContent!==s)info.textContent=s;}
 function reset(){tr.reset();seenLock=null;lastD=null;lastStamp=null;lastRect=null;anchorInvalid=false;}
-function zones(g,t){const [x,y,w,h]=g;const conv=(a,b,ww,hh)=>({x:Math.round((a+M)/(1+2*M)*W),y:Math.round((b+M)/(1+2*M)*H),w:Math.max(2,Math.round(ww/(1+2*M)*W)),h:Math.max(2,Math.round(hh/(1+2*M)*H))});return {art:conv(.14,.12,.72,.49),id:conv((t[0]-x)/w+.02,(t[1]-y)/h+.01,Math.max(.1,t[2]/w-.04),Math.max(.04,t[3]/h-.02))};}
+function zones(g,t){const [x,y,w,h]=g;const conv=(a,b,ww,hh)=>({x:Math.round((a+M)/(1+2*M)*W),y:Math.round((b+M)/(1+2*M)*H),w:Math.max(2,Math.round(ww/(1+2*M)*W)),h:Math.max(2,Math.round(hh/(1+2*M)*H))});const a=root.RiftZonesV071?.art()||{x:.14,y:.12,w:.72,h:.49};return {art:conv(a.x,a.y,a.w,a.h),id:conv((t[0]-x)/w+.02,(t[1]-y)/h+.01,Math.max(.1,t[2]/w-.04),Math.max(.04,t[3]/h-.02))};}
 function draw(z){for(const name of ['art','id']){const p=z[name],m=tr.matches?.[name];for(const kind of ['fixed','moving']){const n=el(`v07-${name}-${kind}`);const dx=kind==='moving'&&m&&m.error<=limits.loss?m.dx:0,dy=kind==='moving'&&m&&m.error<=limits.loss?m.dy:0;n.style.left=`${((p.x+dx)/W*(1+2*M)-M)*100}%`;n.style.top=`${((p.y+dy)/H*(1+2*M)-M)*100}%`;n.style.width=`${p.w/W*(1+2*M)*100}%`;n.style.height=`${p.h/H*(1+2*M)*100}%`;n.dataset.lost=String(kind==='moving'&&!!m&&m.error>limits.loss);}}}
 function sample(force=false){
  if(stream!==session||run!==sessionRun){reset();session=stream;sessionRun=run;lastEpoch=cameraEpoch;}
@@ -63,7 +63,7 @@ function sample(force=false){
  if(seenLock&&!locked)locked=seenLock;
  const stamp=video.currentTime;if(!force&&stamp===lastStamp)return true;
  const g=getRect(el('guide')),t=getRect(el('target'));if(!g.every(Number.isFinite)||!t.every(Number.isFinite)||g[2]<30||g[3]<30)return false;
- const signature=[...g,...t].map(v=>Math.round(v/4)).join(':');if(lastRect&&signature!==lastRect){tr.epoch++;tr.prev=null;tr.stable=0;if(seenLock){tr.anchor=null;tr.phase='held';lastD=null;anchorInvalid=true;}else tr.reset();}lastRect=signature;
+ const signature=[...g,...t].map(v=>Math.round(v/4)).join(':')+':'+JSON.stringify(root.RiftZonesV071?.art()||null);if(lastRect&&signature!==lastRect){tr.epoch++;tr.prev=null;tr.stable=0;if(seenLock){tr.anchor=null;tr.phase='held';lastD=null;anchorInvalid=true;}else tr.reset();}lastRect=signature;
  const [x,y,w,h]=g;ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(video,x-w*M,y-h*M,w*(1+2*M),h*(1+2*M),0,0,W,H);
  const data=ctx.getImageData(0,0,W,H).data,p=new Uint8Array(W*H);for(let j=0,i=0;j<p.length;j++,i+=4)p[j]=(.299*data[i]+.587*data[i+1]+.114*data[i+2]);
  const z=zones(g,t),f={w:W,h:H,p};
@@ -76,5 +76,5 @@ function safeSample(force=false){try{return sample(force);}catch(e){errors++;ena
 root.RiftTrackerV07={begin(){if(!active())return {bypass:true};if(!safeSample()) {if(!active())return {bypass:true};skips++;return null;}const token=tr.begin(performance.now(),!!candidate?.n);if(!token)skips++;return token;},valid(token){if(token?.bypass)return true;if(!active())return false;safeSample();return active()&&tr.valid(token);}};
 el('next')?.addEventListener('click',()=>{reset();cameraEpoch++;lastEpoch=cameraEpoch;},true);
 for(const id of ['trackerEnabledV07','bestFrameEnabled'])el(id)?.addEventListener('change',()=>{reset();cameraEpoch++;candidate=null;lastEpoch=cameraEpoch;});
-setInterval(()=>safeSample(),80);el('versionTag').textContent='V0.7 · tracking lab';
+setInterval(()=>safeSample(),80);el('versionTag').textContent='V0.7.1 · zone calibration';
 })(typeof globalThis!=='undefined'?globalThis:this);
