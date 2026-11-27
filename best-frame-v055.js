@@ -1,4 +1,4 @@
-/* RiftScan V0.5.5 — experimental best-frame acquisition. Load LAST. */
+/* RiftScan V0.7.3.1 — bounded best-frame acquisition and explicit diagnostics. */
 (function(root){
   'use strict';
   // Fixed-size grayscale analysis, independent of OCR input resolution.
@@ -68,6 +68,9 @@
   const enabled=existingToggle||document.createElement('input');enabled.type='checkbox';enabled.checked=true;enabled.disabled=false;enabled.style.width='auto';
   if(!existingToggle){const toggle=document.createElement('label');toggle.className='foot';toggle.append(enabled,document.createTextNode(' Best of 4 frames (V0.5.5)'));panel.before(toggle,info);}
   let batches=0,captures=0,submitted=0,skipped=0,generation=0;
+  const ui=root.RiftCapture0731={phase:'idle',detail:'Waiting for camera',frames:0,submitted:0,skipped:0};
+  function phase(name,detail){Object.assign(ui,{phase:name,detail,frames:captures,submitted,skipped});}
+  let cropProblem='';
   const retain=document.getElementById('retainV06'),retainInfo=document.getElementById('retainInfoV06');
   const hasCandidate=typeof candidate!=='undefined'&&typeof locked!=='undefined'&&typeof C!=='undefined';
   let memory=null,lastAccepted=null;
@@ -87,7 +90,8 @@
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function snapshot(){
     const rect=getRect(target),[x,y,w,h]=rect;
-    if(!rect.every(Number.isFinite)||w<12||h<6||x<-.5||y<-.5||x+w>video.videoWidth+.5||y+h>video.videoHeight+.5)return null;
+    if(!rect.every(Number.isFinite)||w<12||h<6||x<-.5||y<-.5||x+w>video.videoWidth+.5||y+h>video.videoHeight+.5){cropProblem=`ID crop outside camera or too small (${rect.map(n=>Math.round(n)).join(', ')}; video ${video.videoWidth}×${video.videoHeight})`;return null;}
+    cropProblem='';
     // Copy original crop before the video changes. Keep source pixel resolution, capped to avoid huge buffers.
     const width=Math.max(1,Math.min(1200,Math.round(w))),height=Math.max(1,Math.round(width*h/w));
     const c=canvas(width,height);c.getContext('2d').drawImage(video,x,y,w,h,0,0,width,height);
@@ -96,13 +100,16 @@
     return {image:c,quality:metrics(actx.getImageData(0,0,240,ah).data,240,ah)};
   }
   async function capture(t){
-    const frames=[];let last=null;const started=performance.now();
+    const frames=[];let last=null;const started=performance.now();cropProblem='';
     while(frames.length<4&&performance.now()-started<700&&valid(t)){
       // Prefer presented/decoded-frame count where available; use media time otherwise.
       let count=0;try{count=video.getVideoPlaybackQuality?.().totalVideoFrames||0;}catch(_){}
-      const stamp=count>0?`frame:${count}`:Number.isFinite(video.currentTime)?`time:${video.currentTime}`:null;
+      // Android can expose a positive but frozen playback counter on a live stream.
+      // Accept either advancing media time or frame count, never timer ticks alone.
+      const time=Number.isFinite(video.currentTime)?video.currentTime:null;
+      const stamp=time!==null||count>0?`${time}:${count}`:null;
       if(video.readyState>=2&&stamp!==null&&stamp!==last){
-        last=stamp;const f=snapshot();if(f){frames.push(f);captures++;}
+        last=stamp;const f=snapshot();if(f){frames.push(f);captures++;phase('capturing',`${frames.length}/4 frames captured`);}
       }
       if(frames.length<4)await sleep(70);
     }
@@ -121,35 +128,40 @@
     const read=w.recognize.bind(w);
     const wrappedRead=async function(input,...args){
       const t=tokens.get(input);if(!t)return read(input,...args);
-      tokens.delete(input);if(!valid(t))return empty();
-      if(root.RiftTrackerV07){t.tracker=root.RiftTrackerV07.begin();if(!t.tracker){clearMemory();return empty();}if(!valid(t)){clearMemory();return empty();}}
+      tokens.delete(input);if(!valid(t)){phase('waiting','Capture cancelled: camera or geometry changed');return empty();}
+      if(root.RiftTrackerV07){t.tracker=root.RiftTrackerV07.begin();if(!t.tracker){clearMemory();phase('held','Tracker waiting for card replacement or alignment');return empty();}if(!valid(t)){clearMemory();phase('waiting','Tracker or camera changed');return empty();}}
       // The base loop has already processed the previous result by the time this batch begins.
       // Capture its genuine candidate before an unreadable result clears it.
       if(retentionOn()&&lastAccepted&&candidate?.k===lastAccepted.key&&Number.isInteger(candidate.n)&&candidate.n>0&&candidate.k!==locked&&lastAccepted.session===session(t)&&lastAccepted.lock===locked){
         if(!memory||memory.key!==candidate.k||candidate.n>memory.candidate.n){memory={...lastAccepted,candidate:{...candidate},misses:0};}
       }else if(!retentionOn()||lastAccepted&&(lastAccepted.session!==session(t)||lastAccepted.lock!==locked||lastAccepted.key===locked))clearMemory();
-      batches++;const started=performance.now();note('Collecting four frames…');
-      const frames=await capture(t);if(!valid(t))return empty();
+      batches++;const started=performance.now();note('Collecting four frames…');phase('capturing','0/4 frames captured');
+      const frames=await capture(t);if(!valid(t)){phase('waiting','Capture cancelled: camera or geometry changed');return empty();}
       const selection=choose(frames);
-      // Do not submit a clearly changing or incomplete batch. Existing loop handles retry.
-      if(!selection||frames.length!==4||selection.eligible<3||selection.best.quality.score<1.5){clearMemory();skipped++;note(`Waiting for steady readable crop (${frames.length}/4, ${selection?.eligible||0} stable)`);return empty();}
+      // Prefer four frames; after the deadline, accept two or more agreeing distinct samples.
+      if(!selection||selection.eligible<2||selection.best.quality.score<1.5){clearMemory();skipped++;
+        const reason=cropProblem|| (frames.length<2?'Waiting for new camera frames':selection?.eligible<2?'ID crop moving or changing':'ID crop lacks detail');
+        note(`${reason} (${frames.length}/4, ${selection?.eligible||0} stable)`);phase('waiting',reason);return empty();}
       const {best,eligible}=selection;
       const current=context(t,best.quality);
       // Require all four sampled frames to agree with the retained anchor. If the card
       // appears to have changed, never carry forward recognition evidence.
       if(memory&&(!canRetain(memory,current,performance.now())||eligible!==4||frames.some(f=>difference(memory.quality,f.quality)>12)))clearMemory();
-      const prepared=priorPrepare(best.image,[0,0,best.image.width,best.image.height]);
-      submitted++;note(`Batch ${batches}: selected frame ${frames.indexOf(best)+1}/4 · quality ${best.quality.score.toFixed(1)} · ${eligible} stable · ${Math.round(performance.now()-started)}ms capture`);
+      let prepared;try{prepared=priorPrepare(best.image,[0,0,best.image.width,best.image.height]);}catch(e){phase('error','Image preparation error: '+e.message);throw e;}
+      submitted++;phase('reading',`OCR batch ${submitted} · ${eligible}/${frames.length} stable frames`);note(`Batch ${batches}: selected frame ${frames.indexOf(best)+1}/4 · quality ${best.quality.score.toFixed(1)} · ${eligible} stable · ${Math.round(performance.now()-started)}ms capture`);
       // Retain the existing OCR worker, preprocessing fallbacks, confidence and save/duplicate rules.
-      const result=await read(prepared,...args);
-      if(!valid(t)){clearMemory();return empty();}
+      let result;try{result=await read(prepared,...args);}catch(e){phase('error','OCR error: '+e.message);throw e;}
+      if(!valid(t)){clearMemory();phase('waiting','OCR cancelled: camera or tracker changed');return empty();}
+      // Initial reads are not gated by artwork. Still reject a stale ID crop, including
+      // when confirmation memory is disabled. Compare against the frozen best frame.
+      if(t.tracker?.phase==='initial'){const live=snapshot();if(!live||difference(best.quality,live.quality)>12){clearMemory();phase('waiting','ID crop changed during OCR');return empty();}}
       if(retentionOn()){
         const data=result?.data||{},sets=document.getElementById('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean),p=C.parse(data.text||'',sets),confidence=Number(data.confidence)||0;
         const k=p&&confidence>=Number(document.getElementById('threshold').value)?p.set+' '+p.num:null;
         // Check the live crop after OCR as well, only for evidence retention. An actual
         // save still follows the base scanner's rules. No synthetic OCR result is created.
         const live=snapshot();
-        if(!live||difference(best.quality,live.quality)>12){clearMemory();if(t.tracker&&!t.tracker.bypass)return empty();}
+        if(!live||difference(best.quality,live.quality)>12){clearMemory();if(t.tracker&&!t.tracker.bypass){phase('waiting','ID crop changed during OCR');return empty();}}
         else if(k){
           if(memory&&memory.key===k&&k!==locked&&memory.misses>0&&canRetain(memory,current,performance.now())&&(!candidate||candidate.k===k&&candidate.n<memory.candidate.n)){
             try{candidate={...memory.candidate};retentionNote(`Retained ${candidate.n} prior matching read(s) for ${k} across ${memory.misses} miss(es).`);}catch(_){clearMemory();}
@@ -158,7 +170,7 @@
         }else if(memory){memory.misses++;if(!canRetain(memory,current,performance.now()))clearMemory();else retentionNote(`Holding ${memory.candidate.n} prior matching read(s) · ${memory.misses}/2 misses · ${memory.key}.`);}
         else lastAccepted=null;
       }else clearMemory();
-      return result;
+      phase('complete',`OCR returned · confidence ${Math.round(Number(result?.data?.confidence)||0)}%`);return result;
     };w.recognize=wrappedRead;wrapped.set(w,wrappedRead);return w;
   }
   getWorker=async function(...args){return wrap(await priorGetWorker.apply(this,args));};

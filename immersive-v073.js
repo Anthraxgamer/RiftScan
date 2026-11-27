@@ -33,10 +33,11 @@ $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeS
 function tick(){
  if(!active)return;
  const p=$('scanToggleV4'),q=$('quickPause073'),n=$('quickNext073');q.disabled=p.disabled;n.disabled=$('next').disabled;
+ const diag=$('captureDiag0731'),capture=globalThis.RiftCapture0731;if(diag){const text=capture&&$('bestFrameEnabled')?.checked?`${capture.detail} · ${capture.submitted} OCR / ${capture.skipped} skipped`:$('status').textContent; if(diag.textContent!==text)diag.textContent=text;}
  q.textContent=typeof paused!=='undefined'&&paused?'Resume':'Pause';
  toggle.textContent=settings.hidden?'Settings':'Close';
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3 · immersive scanner';
+$('versionTag').textContent='V0.7.3.1 · capture fix';
 })();
