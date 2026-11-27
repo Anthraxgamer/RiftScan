@@ -1,11 +1,12 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10151d">
-  <title>RiftScan · Card scanner</title>
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<meta content="#10151d" name="theme-color"/>
+<title>RiftScan · Card scanner</title>
+<style>
     *{box-sizing:border-box}body{margin:0;background:#0d1118;color:#edf1f6;font:15px/1.5 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:20px 14px 40px}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}h1,h2,p{margin:0}h1{font-size:30px;letter-spacing:-1.5px}h2{font-size:18px}small,.muted{color:#a4b0c0}.tag{color:#9be9d2;border:1px solid #305b52;border-radius:20px;padding:4px 10px;font-size:12px}section{background:#171e29;border:1px solid #2b3543;border-radius:16px;padding:14px;margin:12px 0}.layout{display:grid;gap:12px}@media(min-width:1000px){.layout{grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start}main{max-width:1280px}}.layout>div{min-width:0}.view{position:relative;aspect-ratio:3/4;max-height:57vh;background:#080c11;border-radius:12px;overflow:hidden;isolation:isolate}video{width:100%;height:100%;object-fit:cover;display:block}.guide{position:absolute;left:50%;top:50%;width:min(78%,46vh);aspect-ratio:63/88;transform:translate(-50%,-50%);border:2px solid #75e1bf;border-radius:12px;box-shadow:0 0 0 500px #0005;pointer-events:none}.target{position:absolute;left:1%;width:58%;bottom:3%;height:15%;border:2px dashed #f6d58a;border-radius:5px;background:#f6d58a16}.target span{position:absolute;bottom:100%;left:0;font-size:10px;background:#10151de0;padding:2px 5px;white-space:nowrap;color:#f6d58a}.empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:#a4b0c0;padding:12px;pointer-events:none}.empty[hidden]{display:none}.status{padding:12px 0;color:#9be9d2;min-height:47px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spread{justify-content:space-between}.stack{display:grid;gap:10px}button,input,select,textarea{font:inherit}button{border:1px solid #40516a;border-radius:9px;background:#243144;color:#f2f5f9;padding:10px 12px;cursor:pointer;font-weight:650;min-height:44px}button.primary{background:#8ce5c8;color:#10251f;border-color:#8ce5c8}button:disabled{opacity:.42;cursor:default}input,select,textarea{min-width:0;background:#101620;color:#edf1f6;border:1px solid #40516a;padding:10px;border-radius:8px;width:100%}label{display:block;font-size:13px;color:#b9c5d3}.grow{flex:1}.stats{display:flex;gap:24px;margin:10px 0}.stats strong{display:block;font-size:26px}.item{padding:9px 0;border-top:1px solid #303a49;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.item b{min-width:90px}.item select{width:auto;max-width:130px}.item button{min-width:40px;padding:6px}.warn{color:#f6d58a}.mono,textarea{font:13px/1.6 ui-monospace,monospace}textarea{resize:vertical;min-height:120px}details{margin-top:12px}summary{cursor:pointer;color:#a4b0c0}canvas{display:none}#cropPreview{display:block;width:100%;height:auto;background:#101620}a{color:#9be9d2}.manual{display:grid;grid-template-columns:1fr 1fr;gap:8px}.foot{font-size:12px;color:#a4b0c0;margin-top:15px}.guide.locked{border-color:#f6d58a}
     .cameraControls{display:grid;gap:10px}.cameraControls [hidden], [hidden]{display:none!important}.cameraControls canvas{display:block;width:100%;height:auto;background:#080c11}.cameraControls output{color:#9be9d2}.cameraControls .row button{flex:1}
     /* V0.3: the preview and settings share a fixed-height workspace. Only the settings scroll. */
@@ -20,87 +21,99 @@
     @media(orientation:landscape) and (max-height:550px){.cameraWorkspace{--camera-height:clamp(155px,58dvh,300px)}}
    .ocrPanel{border:1px solid #40516a;border-radius:10px;padding:9px;margin-bottom:10px;overflow-wrap:anywhere}.ocrPanel canvas{max-height:125px;object-fit:contain;margin-top:5px}.ocrPanel .foot{margin-top:4px}.guide[data-scan="reading"]{border-color:#438cf5}.guide[data-scan="uncertain"]{border-color:#f6d58a}.guide[data-scan="saved"]{border-color:#75e1bf}.guide[data-scan="idle"]{border-color:#a4b0c0}
     .perfGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.perfGrid>div{background:#101620;border-radius:8px;padding:8px;min-width:0}.perfGrid strong{display:block;font-size:20px;overflow-wrap:anywhere}.lastScan{border:1px solid #40516a;border-radius:10px;padding:10px;margin:10px 0;overflow-wrap:anywhere}.lastScan[data-saved="true"]{border-color:#75e1bf}.lastScan b{font-size:18px;color:#9be9d2}.perfMethods{white-space:pre-line;overflow-wrap:anywhere}
-  </style>
-  <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
-  <script defer src="core.js"></script>
-  <script defer src="app.js?v=05"></script>
-  <script defer src="camera-v03.js?v=03"></script>
-  <script defer src="recognition-v05.js?v=05"></script>
-  <script defer src="best-frame-v055.js?v=055r2"></script>
-</head>
+  
+/* V0.6: camera geometry stays the same when switching side panels. */
+.cameraWorkspace.panelClosed{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+#collectionPanel{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;background:#101620;border:1px solid #2b3543;border-radius:12px;padding:9px;margin:0;gap:6px}
+#collectionPanel .stats{gap:8px;justify-content:space-between;margin:0;flex:none}#collectionPanel .stats strong{font-size:20px}#collectionPanel .stats small{display:block;font-size:10px;line-height:1.2;white-space:nowrap}#collectionPanel h2{font-size:15px}#collectionPanel #list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding-right:2px}#collectionPanel #undo{padding:5px 7px;min-height:32px;font-size:11px}#collectionPanel .item{gap:4px;padding:6px 0;font-size:12px}#collectionPanel .item b{min-width:0;width:100%;font-size:11px}#collectionPanel .item select{font-size:11px;padding:5px 3px;max-width:100%;min-height:34px}#collectionPanel .item button{min-width:27px;min-height:32px;padding:3px 5px}#collectionPanel .item small{font-size:10px;width:100%}
+.cardStack{border:1px solid #354152;border-radius:8px;padding:5px;margin:5px 0;background:#171e29;overflow-wrap:anywhere}.cardStack summary{display:block;list-style:none;cursor:pointer;color:#edf1f6;padding:2px;min-height:36px}.cardStack summary::-webkit-details-marker{display:none}.stackTitle{display:flex;justify-content:space-between;gap:3px;align-items:center;font-size:13px}.stackTitle strong:last-child{white-space:nowrap}.stackBreakdown{display:block;font-size:10px;color:#b9c5d3;line-height:1.35}.cardStack[data-recent=true]{border-color:#75e1bf;background:#17382a}.stackAdded{color:#9be9d2;font-size:11px;font-weight:700}.cardStack[open] .stackCaret{transform:rotate(90deg)}.stackCaret{display:inline-block;font-size:10px;margin-right:3px}
+#receiptV06{border:1px solid #40516a;border-radius:10px;padding:8px 10px;margin:8px 0;display:grid;gap:2px;min-height:64px}#receiptV06[data-saved=true]{background:#17382a;border-color:#75e1bf}#receiptV06[data-saved=true] #receiptTitle{color:#a3f6cd}#receiptTitle{font-size:18px;font-weight:800;line-height:1.2}#receiptDetail{font-size:12px;color:#d3e5dc}#receiptV06[data-warning=true]{border-color:#e5bd58;background:#302719}#receiptV06[data-warning=true] #receiptTitle{color:#f6d58a}
+#scanBadge{position:absolute;z-index:3;left:5px;right:5px;top:5px;text-align:center;pointer-events:none;border-radius:6px;padding:5px 3px;font-size:11px;font-weight:800;color:#fff;background:#1e2938e8;overflow-wrap:anywhere;line-height:1.2}#scanBadge[data-phase=saved]{background:#14573a;color:#d6ffe9}#scanBadge[data-phase=confirming]{background:#563b80}#scanBadge[data-phase=capturing]{background:#6d531b}#scanBadge[data-phase=reading]{background:#254f91}#scanBadge[data-phase=warning]{background:#69451a}
+.guide[data-phase=waiting]{border-color:#a4b0c0}.guide[data-phase=capturing]{border-color:#e5bd58}.guide[data-phase=reading]{border-color:#438cf5}.guide[data-phase=confirming]{border-color:#ab8aef}.guide[data-phase=saved]{border-color:#66e8ae;box-shadow:0 0 0 500px #0005,inset 0 0 12px #66e8ae80}.guide[data-phase=warning]{border-color:#e5bd58}
+#diagnosticsV06{margin-top:10px}#diagnosticsV06 #liveOCR{margin:8px 0 0}#status{min-height:0;padding:5px 0;font-size:13px}#lastScan{margin:8px 0}#collectionToolsV06{margin-top:12px}#collectionToolsV06 details{margin-top:0}#v06Compatibility{color:#f6d58a;font-size:12px}
+@media(max-width:599px){.cameraWorkspace.panelClosed{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}#collectionPanel{padding:5px;gap:5px}#collectionPanel h2{font-size:13px}#collectionPanel .stats{gap:3px}#collectionPanel .stats strong{font-size:17px}#collectionPanel .stats small{font-size:9px}#collectionPanel #undo{min-height:30px}#collectionPanel .row{gap:3px}#receiptTitle{font-size:17px}}
+@media(prefers-reduced-motion:no-preference){#receiptV06.flash{animation:receiptFlash .45s ease-out}@keyframes receiptFlash{from{box-shadow:0 0 0 4px #75e1bf9c}to{box-shadow:0 0 0 0 transparent}}}
+</style>
+<script defer="" src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
+<script defer="" src="core.js"></script>
+<script defer="" src="app.js?v=05"></script>
+<script defer="" src="camera-v03.js?v=03"></script>
+<script defer="" src="recognition-v05.js?v=05"></script>
+<script defer="" src="best-frame-v055.js?v=060"></script>
+<script defer="" src="mobile-v06.js?v=060"></script></head>
 <body>
 <main>
-  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.5.5 · loading</span></header>
-  <div class="layout">
-    <div>
-      <section id="scannerSection">
-        <div class="cameraWorkspace" id="cameraWorkspace">
-          <div class="view" id="view">
-            <video id="video" autoplay muted playsinline></video>
-            <div class="guide" id="guide"><div class="target" id="target"><span>COLLECTOR NUMBER</span></div></div>
-            <div class="empty" id="empty">Start your camera to scan.<br>Align one upright card with the green outline.</div>
-          </div>
-          <section class="cameraControls" id="cameraPanel" aria-label="Camera settings">
-            <h2>Camera settings</h2>
-            <p class="foot">Settings apply automatically. Scroll this panel only.</p>
-            <p class="mono" id="cameraInfo">Start camera to inspect actual settings.</p>
-            <p class="muted" id="cameraMessage" role="status"></p>
-            <label>Quality preset<select id="profile"><option value="auto">Automatic · recommended</option><option value="max">Maximum clarity</option><option value="performance">Performance</option><option value="custom">Custom</option></select></label>
-            <label>Camera source<select id="cameraSource"><option value="">Automatic rear camera</option></select></label>
-            <label>Requested resolution<select id="resolution"><option value="auto">Automatic</option><option value="3840">4K</option><option value="2560">1440p</option><option value="1920">1080p</option><option value="1280">720p</option><option value="640">480p</option></select></label>
-            <label>Requested frame rate<select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select></label>
-            <div class="row"><button id="resetCamera">Reset defaults</button></div>
-            <label id="zoomRow" hidden>Camera zoom <output id="zoomValue"></output><input type="range" id="zoom"></label>
-            <label id="focusRow" hidden>Focus mode<select id="focusMode"></select></label>
-            <label id="distanceRow" hidden>Manual focus distance <output id="distanceValue"></output><input type="range" id="focusDistance"></label>
-            <label>Collector box vertical position<input id="targetOffset" type="range" min="0" max="18" value="3"></label>
-            <div class="row"><button id="pauseScan" disabled>Pause scanning</button><button id="photoScan" disabled>Capture &amp; scan photo</button></div>
-            <details open><summary>Raw collector-number preview</summary><canvas id="rawPreview"></canvas><p class="foot">Unprocessed crop. Adjust alignment and focus until text is readable.</p></details>
-            <p class="foot">Resolution and FPS are requests, not guarantees. Unsupported controls are hidden. Pause scanning before adjusting the card or camera.</p>
-          </section>
-        </div>
-        <div class="row cameraQuick"><button id="autofocus" disabled>Auto focus</button><button id="toggleCameraPanel" aria-expanded="true" aria-controls="cameraPanel">Hide settings</button></div>
-        <div class="row cameraQuick"><button id="applyCamera">Apply / restart camera</button><button id="scanToggleV4" disabled>Pause scanning</button></div>
-        <p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
-        <div class="status" id="status" role="status">Camera off.</div>
-        <div class="lastScan" id="lastScan"><small>Last automatic save</small><br><b id="lastScanCode">No cards scanned yet</b><p class="foot" id="lastScanInfo">Your saved card will stay visible here while you scan the next one.</p></div>
-        <div id="liveOCR" class="ocrPanel"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><div id="bestFrameControls"><label for="bestFrameEnabled"><input id="bestFrameEnabled" type="checkbox" checked disabled style="width:auto"> Best of 4 frames</label><p class="foot" id="bestFrameV055" role="status">Best-frame module not loaded yet. Original scanner is unchanged.</p></div><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Best-frame quality is a relative image score, not OCR confidence. Foil score is experimental, not a probability.</p></div>
-        <div class="row"><button class="primary grow" id="start">Start camera</button><button id="stop" disabled>Stop</button><button id="torch" disabled>Light</button></div>
-        <div class="row" style="margin-top:10px"><button id="next" class="grow" disabled>Ready for next card</button><label><input type="checkbox" id="sound" checked style="width:auto"> Sound</label></div>
-        <details id="performancePanel"><summary>Session performance</summary>
-          <p id="engineState" class="foot" role="status">OCR engine waiting</p>
-          <div class="perfGrid"><div><small>Automatic saves</small><strong id="perfSaved">0</strong></div><div><small>Avg confirmation</small><strong id="perfConfirm">—</strong></div><div><small>Avg OCR cycle</small><strong id="perfCycle">—</strong></div><div><small>Valid OCR cycles</small><strong id="perfValid">0 / 0</strong></div></div>
-          <p class="foot" id="perfLast">Last confirmation: —</p><p class="foot" id="perfPreferred">Preferred method: Original · line</p><p class="mono perfMethods" id="perfMethods"></p>
-          <p class="foot">Session stats reset when the page reloads. Confirmation time starts at the first cycle in a successful reading streak, not at physical card placement. Valid cycles are not measured card accuracy. Method counts include still scans and repeated readings; automatic saves exclude manual and still-photo adds.</p>
-        </details>
-        <p class="foot">Keep the card upright and fill the outline. Remove it fully before showing an identical copy. Use Ready for next card only after physically replacing it.</p>
-      </section>
-      <section class="stack">
-        <h2>Scanning settings</h2>
-        <label>Finish detection<select id="mode"><option value="auto">Auto · experimental, review uncertain</option><option value="normal">Normal only</option><option value="foil">Foil only</option></select></label>
-        <label>Set codes (comma-separated)<input id="sets" value="OGN,SFD,RAD" autocapitalize="characters"></label>
-        <label>Minimum OCR confidence <span id="thresholdValue">65</span>%<input type="range" min="40" max="90" value="65" id="threshold"></label>
-        <label>Consistent readings<select id="reads"><option value="2">2 · recommended</option><option value="3">3 · cautious</option><option value="1">1 · faster, less reliable</option></select></label>
-        <p class="foot">Live OCR diagnostics are directly beneath the camera.</p>
-      </section>
-    </div>
-    <div>
-      <section class="stack">
-        <div class="row spread"><h2>Collection</h2><button id="undo" disabled>Undo last add</button></div>
-        <div class="stats"><div><strong id="total">0</strong><small>Cards</small></div><div><strong id="unique">0</strong><small>Entries</small></div><div><strong id="pending" class="warn">0</strong><small>Needs review</small></div></div>
-        <div id="list" aria-live="polite"></div>
-        <details><summary>Manual add / correction</summary><div class="manual" style="margin-top:10px"><label>Set<input id="manualSet" placeholder="RAD" maxlength="3"></label><label>Number<input id="manualNumber" placeholder="138a" maxlength="8"></label></div><label>Finish<select id="manualFinish"><option value="normal">Normal</option><option value="foil">Foil</option><option value="review">Needs review</option></select></label><button id="manualAdd" style="margin-top:8px">Add card</button><p class="foot">To correct a code, remove its incorrect entry and add the correct one here.</p></details>
-        <button id="clear">Clear collection</button><small id="storage">Session stored on this device.</small>
-      </section>
-      <section class="stack">
-        <h2>Export collection</h2><p class="muted">Quantity · set · collector number · optional foil</p>
-        <textarea id="output" readonly aria-label="Import-ready text"></textarea><p id="exportNotice" class="warn" hidden>Confirm all uncertain finishes before exporting.</p>
-        <div class="row"><button id="copy" class="primary grow" disabled>Copy text</button><button id="download" disabled>Download .txt</button></div>
-        <label>Destination website<input id="destination" type="url" placeholder="https://your-collection-site.com"></label><button id="open">Open website</button><small>Paste the copied text into the destination's import field. Direct integration is not enabled.</small>
-      </section>
-    </div>
-  </div>
-  <p class="foot">Unofficial fan utility. Camera frames stay in memory and are not uploaded or saved by this app. OCR software and language data load from third-party CDNs. Camera access requires HTTPS or localhost. No card database verification yet.</p>
+<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.6 · loading</span></header>
+<div class="layout">
+<div>
+<section id="scannerSection">
+<div class="cameraWorkspace" id="cameraWorkspace">
+<div class="view" id="view">
+<video autoplay="" id="video" muted="" playsinline=""></video>
+<div class="guide" id="guide"><div class="target" id="target"><span>COLLECTOR NUMBER</span></div></div>
+<div class="empty" id="empty">Start your camera to scan.<br/>Align one upright card with the green outline.</div>
+<div aria-hidden="true" data-phase="waiting" id="scanBadge">WAITING FOR CARD</div></div>
+<section aria-label="Camera settings" class="cameraControls" hidden="" id="cameraPanel">
+<h2>Camera settings</h2>
+<p class="foot">Settings apply automatically. Scroll this panel only.</p>
+<p class="mono" id="cameraInfo">Start camera to inspect actual settings.</p>
+<p class="muted" id="cameraMessage" role="status"></p>
+<label>Quality preset<select id="profile"><option value="auto">Automatic · recommended</option><option value="max">Maximum clarity</option><option value="performance">Performance</option><option value="custom">Custom</option></select></label>
+<label>Camera source<select id="cameraSource"><option value="">Automatic rear camera</option></select></label>
+<label>Requested resolution<select id="resolution"><option value="auto">Automatic</option><option value="3840">4K</option><option value="2560">1440p</option><option value="1920">1080p</option><option value="1280">720p</option><option value="640">480p</option></select></label>
+<label>Requested frame rate<select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select></label>
+<div class="row"><button id="resetCamera">Reset defaults</button></div>
+<label hidden="" id="zoomRow">Camera zoom <output id="zoomValue"></output><input id="zoom" type="range"/></label>
+<label hidden="" id="focusRow">Focus mode<select id="focusMode"></select></label>
+<label hidden="" id="distanceRow">Manual focus distance <output id="distanceValue"></output><input id="focusDistance" type="range"/></label>
+<label>Collector box vertical position<input id="targetOffset" max="18" min="0" type="range" value="3"/></label>
+<div class="row"><button disabled="" id="pauseScan">Pause scanning</button><button disabled="" id="photoScan">Capture &amp; scan photo</button></div>
+<details open=""><summary>Raw collector-number preview</summary><canvas id="rawPreview"></canvas><p class="foot">Unprocessed crop. Adjust alignment and focus until text is readable.</p></details>
+<p class="foot">Resolution and FPS are requests, not guarantees. Unsupported controls are hidden. Pause scanning before adjusting the card or camera.</p>
+</section>
+<section aria-label="Live collection" class="stack" id="collectionPanel">
+<div class="row spread"><h2>Collection</h2><button disabled="" id="undo">Undo</button></div>
+<div class="stats"><div><strong id="total">0</strong><small>Cards</small></div><div><strong id="unique">0</strong><small>IDs</small></div><div><strong class="warn" id="pending">0</strong><small>Review</small></div></div>
+<div aria-live="polite" id="list"></div>
+
+
+</section></div><div aria-atomic="true" aria-live="polite" id="receiptV06" role="status"><div id="receiptTitle">No new card saved</div><div id="receiptDetail">Wait for CARD SAVED before moving to the next card.</div></div><div class="row"><button class="primary grow" id="start">Start camera</button><button disabled="" id="stop">Stop</button><button disabled="" id="torch">Light</button></div><div class="row" style="margin-top:10px"><button class="grow" disabled="" id="next">Ready for next card</button><label><input checked="" id="sound" style="width:auto" type="checkbox"/> Sound</label><label><input checked="" id="hapticV06" style="width:auto" type="checkbox"/> Vibrate</label></div>
+<div class="row cameraQuick"><button disabled="" id="autofocus">Auto focus</button><button aria-controls="cameraPanel collectionPanel" aria-expanded="false" id="toggleCameraPanel">Camera settings</button></div>
+<div class="row cameraQuick"><button id="applyCamera">Apply / restart camera</button><button disabled="" id="scanToggleV4">Pause scanning</button></div>
+<p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
+<div class="status" id="status" role="status">Camera off.</div>
+
+<details id="diagnosticsV06"><summary>OCR diagnostics · best-frame preview</summary><div class="ocrPanel" id="liveOCR"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><div id="bestFrameControls"><label for="bestFrameEnabled"><input checked="" disabled="" id="bestFrameEnabled" style="width:auto" type="checkbox"/> Best of 4 frames</label><p class="foot" id="bestFrameV055" role="status">Best-frame module not loaded yet. Original scanner is unchanged.</p></div><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Best-frame quality is a relative image score, not OCR confidence. Foil score is experimental, not a probability.</p></div><div class="lastScan" id="lastScan"><small>Last automatic save</small><br/><b id="lastScanCode">No cards scanned yet</b><p class="foot" id="lastScanInfo">Your saved card will stay visible here while you scan the next one.</p></div></details>
+
+
+<details id="performancePanel"><summary>Session performance</summary>
+<p class="foot" id="engineState" role="status">OCR engine waiting</p>
+<div class="perfGrid"><div><small>Automatic saves</small><strong id="perfSaved">0</strong></div><div><small>Avg confirmation</small><strong id="perfConfirm">—</strong></div><div><small>Avg OCR cycle</small><strong id="perfCycle">—</strong></div><div><small>Valid OCR cycles</small><strong id="perfValid">0 / 0</strong></div></div>
+<p class="foot" id="perfLast">Last confirmation: —</p><p class="foot" id="perfPreferred">Preferred method: Original · line</p><p class="mono perfMethods" id="perfMethods"></p>
+<p class="foot">Session stats reset when the page reloads. Confirmation time starts at the first cycle in a successful reading streak, not at physical card placement. Valid cycles are not measured card accuracy. Method counts include still scans and repeated readings; automatic saves exclude manual and still-photo adds.</p>
+</details>
+<p class="foot">Keep the card upright and fill the outline. Remove it fully before showing an identical copy. Use Ready for next card only after physically replacing it.</p>
+<p hidden="" id="v06Compatibility"></p></section>
+<section class="stack">
+<h2>Scanning settings</h2>
+<label>Finish detection<select id="mode"><option value="auto">Auto · experimental, review uncertain</option><option value="normal">Normal only</option><option value="foil">Foil only</option></select></label>
+<label>Set codes (comma-separated)<input autocapitalize="characters" id="sets" value="OGN,SFD,RAD"/></label>
+<label>Minimum OCR confidence <span id="thresholdValue">65</span>%<input id="threshold" max="90" min="40" type="range" value="65"/></label>
+<label>Consistent readings<select id="reads"><option value="2">2 · recommended</option><option value="3">3 · cautious</option><option value="1">1 · faster, less reliable</option></select></label><label><input checked="" id="retainV06" style="width:auto" type="checkbox"/> Retain matching readings through brief OCR failures (best-frame only)</label><p class="foot" id="retainInfoV06">Experimental: same-looking crop, up to 2 misses / 8 seconds. Never counts an unreadable frame as a match.</p>
+<p class="foot">Open OCR diagnostics to inspect the selected image and recognition attempts.</p>
+</section>
+</div>
+<div>
+<section class="stack" id="collectionToolsV06"><h2>Collection tools</h2><details><summary>Manual add / correction</summary><div class="manual" style="margin-top:10px"><label>Set<input id="manualSet" maxlength="3" placeholder="RAD"/></label><label>Number<input id="manualNumber" maxlength="8" placeholder="138a"/></label></div><label>Finish<select id="manualFinish"><option value="normal">Normal</option><option value="foil">Foil</option><option value="review">Needs review</option></select></label><button id="manualAdd" style="margin-top:8px">Add card</button><p class="foot">To correct a code, remove its incorrect entry and add the correct one here.</p></details><button id="clear">Clear collection</button><small id="storage">Session stored on this device.</small></section>
+<section class="stack">
+<h2>Export collection</h2><p class="muted">Quantity · set · collector number · optional foil</p>
+<textarea aria-label="Import-ready text" id="output" readonly=""></textarea><p class="warn" hidden="" id="exportNotice">Confirm all uncertain finishes before exporting.</p>
+<div class="row"><button class="primary grow" disabled="" id="copy">Copy text</button><button disabled="" id="download">Download .txt</button></div>
+<label>Destination website<input id="destination" placeholder="https://your-collection-site.com" type="url"/></label><button id="open">Open website</button><small>Paste the copied text into the destination's import field. Direct integration is not enabled.</small>
+</section>
+</div>
+</div>
+<p class="foot">Unofficial fan utility. Camera frames stay in memory and are not uploaded or saved by this app. OCR software and language data load from third-party CDNs. Camera access requires HTTPS or localhost. No card database verification yet.</p>
 </main>
 </body>
 </html>

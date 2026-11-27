@@ -26,9 +26,9 @@
   function difference(a,b){
     if(a.w!==b.w||a.h!==b.h)return Infinity;
     let n=0,ma=0,mb=0;const w=a.w,h=a.h;
-    for(let y=1;y<h-1;y+=2)for(let x=1;x<w-1;x+=2){const i=y*w+x;ma+=a.luma[i];mb+=b.luma[i];n++;}
+    for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;ma+=a.luma[i];mb+=b.luma[i];n++;}
     if(!n)return Infinity; ma/=n;mb/=n;let d=0;
-    for(let y=1;y<h-1;y+=2)for(let x=1;x<w-1;x+=2){const i=y*w+x;d+=Math.abs((a.luma[i]-ma)-(b.luma[i]-mb));}
+    for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;d+=Math.abs((a.luma[i]-ma)-(b.luma[i]-mb));}
     return d/n;
   }
   function choose(frames,maxDifference=16){
@@ -44,7 +44,13 @@
     for(const f of eligible)if(f.quality.score>best.quality.score)best=f;
     return {best,eligible:eligible.length};
   }
-  if(typeof module!=='undefined'&&module.exports){module.exports={metrics,difference,choose};return;}
+  // Confirmation memory contains actual prior accepted readings only. A miss never increments it.
+  function canRetain(memory,current,now,limits={maxAge:8000,maxMisses:2,maxDifference:12}){
+    return !!memory&&!!current&&memory.session===current.session&&memory.lock===current.lock&&
+      now-memory.at<=limits.maxAge&&memory.misses<=limits.maxMisses&&
+      difference(memory.quality,current.quality)<=limits.maxDifference;
+  }
+  if(typeof module!=='undefined'&&module.exports){module.exports={metrics,difference,choose,canRetain};return;}
   const existingInfo=document.getElementById('bestFrameV055');
   const existingToggle=document.getElementById('bestFrameEnabled');
   const version=document.getElementById('versionTag');
@@ -62,8 +68,19 @@
   const enabled=existingToggle||document.createElement('input');enabled.type='checkbox';enabled.checked=true;enabled.disabled=false;enabled.style.width='auto';
   if(!existingToggle){const toggle=document.createElement('label');toggle.className='foot';toggle.append(enabled,document.createTextNode(' Best of 4 frames (V0.5.5)'));panel.before(toggle,info);}
   let batches=0,captures=0,submitted=0,skipped=0,generation=0;
-  document.getElementById('next')?.addEventListener('click',()=>{generation++;},true);
-  enabled.addEventListener?.('change',()=>{generation++;note(enabled.checked?'Best-frame enabled':'Original recognition enabled');});
+  const retain=document.getElementById('retainV06'),retainInfo=document.getElementById('retainInfoV06');
+  const hasCandidate=typeof candidate!=='undefined'&&typeof locked!=='undefined'&&typeof C!=='undefined';
+  let memory=null,lastAccepted=null;
+  const clearMemory=()=>{memory=null;lastAccepted=null;};
+  const retentionOn=()=>!!retain?.checked&&hasCandidate;
+  if(retain&&!hasCandidate){retain.checked=false;retain.disabled=true;if(retainInfo)retainInfo.textContent='Retention unavailable: scanner interface not recognized.';}
+  const session=t=>`${t.id}:${t.epoch}:${t.generation}`;
+  const context=(t,quality)=>({session:session(t),lock:hasCandidate?locked:null,quality});
+  const retentionNote=msg=>{if(retainInfo)retainInfo.textContent=msg;};
+  for(const id of ['sets','threshold','reads','mode','retainV06'])document.getElementById(id)?.addEventListener('change',clearMemory);
+  document.addEventListener?.('visibilitychange',clearMemory);
+  document.getElementById('next')?.addEventListener('click',()=>{generation++;clearMemory();},true);
+  enabled.addEventListener?.('change',()=>{generation++;clearMemory();note(enabled.checked?'Best-frame enabled':'Original recognition enabled');});
   const note=s=>{info.textContent=`${s} · ${captures} frames / ${submitted} OCR batches / ${skipped} skipped`;};
   const valid=t=>t.id===run&&t.epoch===cameraEpoch&&t.generation===generation&&!!stream&&!paused&&!adjusting&&!document.hidden;
   const empty=()=>({data:{text:'',confidence:0}});
@@ -94,7 +111,7 @@
   // Only the automatic loop calls prepare() without arguments while recognizing.
   // Explicit photo captures and other diagnostic calls use the existing path.
   prepare=function(...args){
-    if(!enabled.checked||args.length||!recognizing||paused||adjusting||!stream)return priorPrepare.apply(this,args);
+    if(!enabled.checked||args.length||!recognizing||paused||adjusting||!stream){clearMemory();return priorPrepare.apply(this,args);}
     // V0.5 may preload or rewrap its worker asynchronously. Attach to its latest method.
     if(typeof worker!=='undefined'&&worker)wrap(worker);
     const token=canvas(1,1);tokens.set(token,{id:run,epoch:cameraEpoch,generation});return token;
@@ -105,21 +122,46 @@
     const wrappedRead=async function(input,...args){
       const t=tokens.get(input);if(!t)return read(input,...args);
       tokens.delete(input);if(!valid(t))return empty();
+      // The base loop has already processed the previous result by the time this batch begins.
+      // Capture its genuine candidate before an unreadable result clears it.
+      if(retentionOn()&&lastAccepted&&candidate?.k===lastAccepted.key&&Number.isInteger(candidate.n)&&candidate.n>0&&candidate.k!==locked&&lastAccepted.session===session(t)&&lastAccepted.lock===locked){
+        if(!memory||memory.key!==candidate.k||candidate.n>memory.candidate.n){memory={...lastAccepted,candidate:{...candidate},misses:0};}
+      }else if(!retentionOn()||lastAccepted&&(lastAccepted.session!==session(t)||lastAccepted.lock!==locked||lastAccepted.key===locked))clearMemory();
       batches++;const started=performance.now();note('Collecting four frames…');
       const frames=await capture(t);if(!valid(t))return empty();
       const selection=choose(frames);
       // Do not submit a clearly changing or incomplete batch. Existing loop handles retry.
-      if(!selection||frames.length!==4||selection.eligible<3||selection.best.quality.score<1.5){skipped++;note(`Waiting for steady readable crop (${frames.length}/4, ${selection?.eligible||0} stable)`);return empty();}
+      if(!selection||frames.length!==4||selection.eligible<3||selection.best.quality.score<1.5){clearMemory();skipped++;note(`Waiting for steady readable crop (${frames.length}/4, ${selection?.eligible||0} stable)`);return empty();}
       const {best,eligible}=selection;
+      const current=context(t,best.quality);
+      // Require all four sampled frames to agree with the retained anchor. If the card
+      // appears to have changed, never carry forward recognition evidence.
+      if(memory&&(!canRetain(memory,current,performance.now())||eligible!==4||frames.some(f=>difference(memory.quality,f.quality)>12)))clearMemory();
       const prepared=priorPrepare(best.image,[0,0,best.image.width,best.image.height]);
       submitted++;note(`Batch ${batches}: selected frame ${frames.indexOf(best)+1}/4 · quality ${best.quality.score.toFixed(1)} · ${eligible} stable · ${Math.round(performance.now()-started)}ms capture`);
       // Retain the existing OCR worker, preprocessing fallbacks, confidence and save/duplicate rules.
       const result=await read(prepared,...args);
-      if(!valid(t))return empty();return result;
+      if(!valid(t)){clearMemory();return empty();}
+      if(retentionOn()){
+        const data=result?.data||{},sets=document.getElementById('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean),p=C.parse(data.text||'',sets),confidence=Number(data.confidence)||0;
+        const k=p&&confidence>=Number(document.getElementById('threshold').value)?p.set+' '+p.num:null;
+        // Check the live crop after OCR as well, only for evidence retention. An actual
+        // save still follows the base scanner's rules. No synthetic OCR result is created.
+        const live=snapshot();
+        if(!live||difference(best.quality,live.quality)>12){clearMemory();}
+        else if(k){
+          if(memory&&memory.key===k&&k!==locked&&memory.misses>0&&canRetain(memory,current,performance.now())&&(!candidate||candidate.k===k&&candidate.n<memory.candidate.n)){
+            try{candidate={...memory.candidate};retentionNote(`Retained ${candidate.n} prior matching read(s) for ${k} across ${memory.misses} miss(es).`);}catch(_){clearMemory();}
+          }else if(memory&&memory.key!==k)clearMemory();
+          lastAccepted={...current,key:k,at:performance.now()};memory=null;
+        }else if(memory){memory.misses++;if(!canRetain(memory,current,performance.now()))clearMemory();else retentionNote(`Holding ${memory.candidate.n} prior matching read(s) · ${memory.misses}/2 misses · ${memory.key}.`);}
+        else lastAccepted=null;
+      }else clearMemory();
+      return result;
     };w.recognize=wrappedRead;wrapped.set(w,wrappedRead);return w;
   }
   getWorker=async function(...args){return wrap(await priorGetWorker.apply(this,args));};
   // Install before camera use; also handle a worker already preloaded by V0.5.
   if(typeof worker!=='undefined'&&worker)wrap(worker);
-  if(version)version.textContent='V0.5.5 · best frame';
+  if(version)version.textContent='V0.6 · best frame';
 })(typeof globalThis!=='undefined'?globalThis:this);
