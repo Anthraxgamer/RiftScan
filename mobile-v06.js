@@ -99,6 +99,7 @@ function tick(){
       const saved=lock&&cards().some(c=>keyOf(c)===lock);
       phase('waiting',saved?'WAITING FOR NEXT CARD':lock?'REPLACE CARD / NEXT':'ALIGN / HOLD STEADY');return;
     }
+    if(capture.phase==='retry'){phase('warning','RETRY CAPTURE');return;}
     if(capture.phase==='error'){phase('warning','OCR ERROR');return;}
     if(capture.phase==='waiting'){phase('waiting','ALIGN / HOLD STEADY');return;}
   }
