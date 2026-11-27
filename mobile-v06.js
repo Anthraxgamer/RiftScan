@@ -99,6 +99,7 @@ const listObserver=new MutationObserver(()=>{if(haveItems)groupRows();reconcile(
 const saveObserver=new MutationObserver(()=>{reconcile();tick();});
 for(const id of ['perfSaved','lastScanCode','total']){const e=el(id);if(e)saveObserver.observe(e,{childList:true,characterData:true,subtree:true});}
 el('next')?.addEventListener('click',()=>{forceNext=true;},true);
+document.addEventListener('riftscan:rearmed',()=>{forceNext=true;tick();});
 if(haveItems){groupRows();}else warning('Collection state unavailable: original list is preserved; enhanced save receipts and stacking are disabled.');
 // Preserve original sound as fallback; use a distinctive rising two-tone on successful scanner beep.
 if(typeof beep==='function'){

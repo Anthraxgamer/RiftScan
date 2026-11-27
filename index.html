@@ -33,24 +33,25 @@
 #diagnosticsV06{margin-top:10px}#diagnosticsV06 #liveOCR{margin:8px 0 0}#status{min-height:0;padding:5px 0;font-size:13px}#lastScan{margin:8px 0}#collectionToolsV06{margin-top:12px}#collectionToolsV06 details{margin-top:0}#v06Compatibility{color:#f6d58a;font-size:12px}
 @media(max-width:599px){.cameraWorkspace.panelClosed{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}#collectionPanel{padding:5px;gap:5px}#collectionPanel h2{font-size:13px}#collectionPanel .stats{gap:3px}#collectionPanel .stats strong{font-size:17px}#collectionPanel .stats small{font-size:9px}#collectionPanel #undo{min-height:30px}#collectionPanel .row{gap:3px}#receiptTitle{font-size:17px}}
 @media(prefers-reduced-motion:no-preference){#receiptV06.flash{animation:receiptFlash .45s ease-out}@keyframes receiptFlash{from{box-shadow:0 0 0 4px #75e1bf9c}to{box-shadow:0 0 0 0 transparent}}}
-</style>
+#trackerOverlayV07{position:absolute;inset:0;pointer-events:none;z-index:2} .v07zone{position:absolute;border:1px dashed #efc36d;border-radius:3px;pointer-events:none}.v07zone.moving{border:2px solid #65e8ae}.v07zone[data-lost=true]{border-color:#ef8585;opacity:.5}#trackerInfoV07{font-size:13px;color:#a3e8d0;margin:5px 0;min-height:1.5em}#trackerStatsV07{font-size:11px;color:#a4b0c0}#trackerOverlayV07[data-phase=departed] .moving{opacity:.25} </style>
 <script defer="" src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
 <script defer="" src="core.js"></script>
 <script defer="" src="app.js?v=05"></script>
 <script defer="" src="camera-v03.js?v=03"></script>
 <script defer="" src="recognition-v05.js?v=05"></script>
-<script defer="" src="best-frame-v055.js?v=060"></script>
-<script defer="" src="mobile-v06.js?v=060"></script></head>
+<script defer="" src="best-frame-v055.js?v=070"></script>
+<script defer="" src="mobile-v06.js?v=070"></script>
+<script defer src="tracker-v07.js?v=070"></script></head>
 <body>
 <main>
-<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.6 · loading</span></header>
+<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7 · loading</span></header>
 <div class="layout">
 <div>
 <section id="scannerSection">
 <div class="cameraWorkspace" id="cameraWorkspace">
 <div class="view" id="view">
 <video autoplay="" id="video" muted="" playsinline=""></video>
-<div class="guide" id="guide"><div class="target" id="target"><span>COLLECTOR NUMBER</span></div></div>
+<div class="guide" id="guide"><div class="target" id="target"><span>COLLECTOR NUMBER</span></div><div id="trackerOverlayV07" hidden aria-hidden="true"><i class="v07zone" id="v07-art-fixed"></i><i class="v07zone moving" id="v07-art-moving"></i><i class="v07zone" id="v07-id-fixed"></i><i class="v07zone moving" id="v07-id-moving"></i></div></div>
 <div class="empty" id="empty">Start your camera to scan.<br/>Align one upright card with the green outline.</div>
 <div aria-hidden="true" data-phase="waiting" id="scanBadge">WAITING FOR CARD</div></div>
 <section aria-label="Camera settings" class="cameraControls" hidden="" id="cameraPanel">
@@ -77,7 +78,7 @@
 <div aria-live="polite" id="list"></div>
 
 
-</section></div><div aria-atomic="true" aria-live="polite" id="receiptV06" role="status"><div id="receiptTitle">No new card saved</div><div id="receiptDetail">Wait for CARD SAVED before moving to the next card.</div></div><div class="row"><button class="primary grow" id="start">Start camera</button><button disabled="" id="stop">Stop</button><button disabled="" id="torch">Light</button></div><div class="row" style="margin-top:10px"><button class="grow" disabled="" id="next">Ready for next card</button><label><input checked="" id="sound" style="width:auto" type="checkbox"/> Sound</label><label><input checked="" id="hapticV06" style="width:auto" type="checkbox"/> Vibrate</label></div>
+</section></div><div aria-atomic="true" aria-live="polite" id="receiptV06" role="status"><div id="receiptTitle">No new card saved</div><div id="receiptDetail">Wait for CARD SAVED before moving to the next card.</div></div><p id="trackerInfoV07" role="status">Tracker loading…</p><p id="trackerStatsV07">0 samples · 0 auto rearms · 0 OCR batches avoided</p><div class="row"><button class="primary grow" id="start">Start camera</button><button disabled="" id="stop">Stop</button><button disabled="" id="torch">Light</button></div><div class="row" style="margin-top:10px"><button class="grow" disabled="" id="next">Ready for next card</button><label><input checked="" id="sound" style="width:auto" type="checkbox"/> Sound</label><label><input checked="" id="hapticV06" style="width:auto" type="checkbox"/> Vibrate</label></div>
 <div class="row cameraQuick"><button disabled="" id="autofocus">Auto focus</button><button aria-controls="cameraPanel collectionPanel" aria-expanded="false" id="toggleCameraPanel">Camera settings</button></div>
 <div class="row cameraQuick"><button id="applyCamera">Apply / restart camera</button><button disabled="" id="scanToggleV4">Pause scanning</button></div>
 <p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
@@ -95,7 +96,7 @@
 <p class="foot">Keep the card upright and fill the outline. Remove it fully before showing an identical copy. Use Ready for next card only after physically replacing it.</p>
 <p hidden="" id="v06Compatibility"></p></section>
 <section class="stack">
-<h2>Scanning settings</h2>
+<h2>Scanning settings</h2><label><input checked id="trackerEnabledV07" type="checkbox" style="width:auto"> Automatic card replacement (experimental)</label><label><input checked id="trackerZonesV07" type="checkbox" style="width:auto"> Show stationary and moving tracking zones</label><p class="foot">Gold dashed = fixed region; green = best matching translation; red = lost. Artwork region uses a tighter tolerance than collector ID. Remove each saved card completely before presenting the next. Best of 4 must be enabled.</p>
 <label>Finish detection<select id="mode"><option value="auto">Auto · experimental, review uncertain</option><option value="normal">Normal only</option><option value="foil">Foil only</option></select></label>
 <label>Set codes (comma-separated)<input autocapitalize="characters" id="sets" value="OGN,SFD,RAD"/></label>
 <label>Minimum OCR confidence <span id="thresholdValue">65</span>%<input id="threshold" max="90" min="40" type="range" value="65"/></label>
