@@ -22,35 +22,18 @@
     button.disabled = !track || !available || focusing || adjusting;
     if (track !== observedTrack) {
       observedTrack = track;
-      message.textContent = !track ? 'Start the camera to check autofocus support.' : available
+      message.textContent = (track&&cameraFocusReports.get(track)) || (!track ? 'Start the camera to check autofocus support.' : available
         ? 'Autofocus available. Hold the card steady and tap Auto focus.'
-        : 'This camera/browser does not expose autofocus control. Try another rear camera or browser.';
+        : 'This camera/browser does not expose autofocus control. Try another rear camera or browser.');
     }
   }
 
   // Keep the negotiated video mode and other controls when changing focus.
   function focusConstraints(track, mode) {
-    const previous = track.getConstraints?.() || {};
-    const actual = track.getSettings?.() || {};
-    const caps = capabilities(track);
-    const next = { ...previous };
-    delete next.focusDistance;
-    delete next.focusMode;
-    const advanced = (previous.advanced || []).map(entry => {
-      const copy = { ...entry };
-      delete copy.focusMode;
-      delete copy.focusDistance;
-      return copy;
-    }).filter(entry => Object.keys(entry).length);
-    for (const key of ['width', 'height', 'frameRate']) {
-      if (next[key] == null && Number.isFinite(actual[key])) next[key] = { ideal: actual[key] };
-    }
-    // V0.2 can clear previous constraints when changing a different setting.
-    // Preserve the currently reported zoom and torch as well, when exposed.
-    if (actual.zoom != null && caps.zoom && next.zoom == null && !advanced.some(a => 'zoom' in a)) advanced.push({zoom: actual.zoom});
-    if (typeof actual.torch === 'boolean' && caps.torch && next.torch == null && !advanced.some(a => 'torch' in a)) advanced.push({torch: actual.torch});
-    next.focusMode = { exact: mode };
-    if (advanced.length) next.advanced = advanced; else delete next.advanced;
+    const next=mergedCameraConstraints(track,{focusMode:mode});
+    next.advanced=(next.advanced||[]).map(entry=>{const copy={...entry};delete copy.focusMode;return copy;}).filter(entry=>Object.keys(entry).length);
+    if(!next.advanced.length)delete next.advanced;
+    next.focusMode={exact:mode};
     return next;
   }
 
@@ -90,7 +73,8 @@
     sync();
     try {
       if (modes.includes('single-shot')) {
-        const confirmed = await requestMode(track, 'single-shot');
+        let confirmed=false;
+        try { confirmed=await requestMode(track,'single-shot'); } catch(error) { if(!modes.includes('continuous'))throw error; }
         await delay(850); // allow the lens to settle; not a focus-lock signal
         if (track !== trackNow()) return;
         if (modes.includes('continuous')) {
@@ -103,17 +87,22 @@
           message.textContent = confirmed ? 'Single-shot autofocus requested. Check text sharpness.' : 'Autofocus requested, but the browser did not confirm the focus mode.';
         }
       } else {
+        // Some devices expose a disabled mode. Cycling through it can restart continuous AF.
+        if(modes.includes('none')&&track.getSettings?.().focusMode==='continuous'){
+          try{await requestMode(track,'none');await delay(120);}catch(_){}
+        }
+        if(track!==trackNow())return;
         const confirmed = await requestMode(track, 'continuous');
         await delay(850);
         if (track !== trackNow()) return;
-        message.textContent = confirmed ? 'Continuous autofocus active. Browser may not force a new focus cycle; check sharpness.' : 'Autofocus requested, but the browser did not confirm the focus mode.';
+        message.textContent = confirmed ? 'Continuous autofocus requested. Lens response depends on browser; check sharpness.' : 'Autofocus requested, but the browser did not confirm the focus mode.';
       }
     } catch (error) {
       if (track === trackNow()) message.textContent = 'Autofocus unavailable: ' + error.message;
     } finally {
       if (track === trackNow()) {
         try { await refreshCamera(); } catch (_) { /* diagnostics are best effort */ }
-        if (track === trackNow()) adjusting = false;
+        if (track === trackNow()) { adjusting = false; cameraFocusReports.set(track,message.textContent); }
       }
       focusing = false;
       button.textContent = 'Auto focus';
