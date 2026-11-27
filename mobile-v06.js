@@ -94,7 +94,11 @@ function tick(){
   if(el('bestFrameEnabled')?.checked&&capture){
     if(capture.phase==='capturing'){phase('capturing','CAPTURING IMAGE');return;}
     if(capture.phase==='reading'){phase('reading','READING CARD');return;}
-    if(capture.phase==='held'){phase('waiting','WAITING FOR NEXT CARD');return;}
+    if(capture.phase==='held'){
+      const lock=typeof locked!=='undefined'?locked:null;
+      const saved=lock&&cards().some(c=>keyOf(c)===lock);
+      phase('waiting',saved?'WAITING FOR NEXT CARD':lock?'REPLACE CARD / NEXT':'ALIGN / HOLD STEADY');return;
+    }
     if(capture.phase==='error'){phase('warning','OCR ERROR');return;}
     if(capture.phase==='waiting'){phase('waiting','ALIGN / HOLD STEADY');return;}
   }

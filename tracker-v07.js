@@ -73,7 +73,27 @@ function sample(force=false){
  const labels={seeking:'Align card · waiting for stability',ready:'New card ready · reading',held:'Card saved · remove it fully',removing:'Removing card · keep going',departed:'Card removed · align next copy',probe:'Changed image · checking for a different ID'};say(anchorInvalid?'Saved lock retained · alignment changed, use Next after replacing':labels[tr.phase]||tr.phase);stats.textContent=`${samples} samples · ${rearms} auto rearms · ${skips} OCR batches avoided${errors?` · ${errors} tracker errors`:''}`;return true;
 }
 function safeSample(force=false){try{return sample(force);}catch(e){errors++;enabled.checked=false;overlay.hidden=true;say('Tracker stopped: '+e.message+' · manual Next available');console.warn(e);return false;}}
-root.RiftTrackerV07={begin(){if(!active())return {bypass:true};if(!safeSample()) {if(!active())return {bypass:true};skips++;return null;}const token=tr.begin(performance.now(),!!candidate?.n);if(!token)skips++;return token;},valid(token){if(token?.bypass)return true;if(!active())return false;safeSample();return active()&&tr.valid(token);}};
+// Before a card is actually saved, the artwork tracker must not veto a readable ID.
+function initialToken(lock,remembered,epoch){return !lock&&!remembered?{phase:'initial',epoch}:null;}
+function initialValid(token,lock,remembered,epoch){return token?.phase==='initial'&&token.epoch===epoch&&!lock&&!remembered;}
+root.RiftTrackerV07={
+ begin(){
+   if(!active())return {bypass:true};
+   const sampled=safeSample();
+   if(!active())return {bypass:true};
+   const first=initialToken(locked,seenLock,cameraEpoch);
+   if(first)return first;
+   if(!sampled){skips++;return null;}
+   const token=tr.begin(performance.now(),!!candidate?.n);if(!token)skips++;return token;
+ },
+ valid(token){
+   if(token?.bypass)return true;
+   if(!active())return false;
+   // Frozen ID quality and post-OCR ID comparison remain in best-frame module.
+   if(token?.phase==='initial')return initialValid(token,locked,seenLock,cameraEpoch);
+   safeSample();return active()&&tr.valid(token);
+ }
+};
 el('next')?.addEventListener('click',()=>{reset();cameraEpoch++;lastEpoch=cameraEpoch;},true);
 for(const id of ['trackerEnabledV07','bestFrameEnabled'])el(id)?.addEventListener('change',()=>{reset();cameraEpoch++;candidate=null;lastEpoch=cameraEpoch;});
 setInterval(()=>safeSample(),80);el('versionTag').textContent='V0.7.1 · zone calibration';

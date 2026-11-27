@@ -85,7 +85,16 @@
   document.getElementById('next')?.addEventListener('click',()=>{generation++;clearMemory();},true);
   enabled.addEventListener?.('change',()=>{generation++;clearMemory();note(enabled.checked?'Best-frame enabled':'Original recognition enabled');});
   const note=s=>{info.textContent=`${s} · ${captures} frames / ${submitted} OCR batches / ${skipped} skipped`;};
-  const valid=t=>t.id===run&&t.epoch===cameraEpoch&&t.generation===generation&&!!stream&&!paused&&!adjusting&&!document.hidden&&(!t.tracker||root.RiftTrackerV07?.valid(t.tracker));
+  const invalidReason=t=>{
+    if(t.id!==run||!stream)return 'Camera session ended';
+    if(t.epoch!==cameraEpoch)return 'Camera or crop geometry changed';
+    if(t.generation!==generation)return 'Capture settings changed';
+    if(paused||adjusting||document.hidden)return 'Scanning paused or camera adjusting';
+    if(t.tracker&&!root.RiftTrackerV07?.valid(t.tracker))return 'Card moved or tracker state changed';
+    return '';
+  };
+  const valid=t=>!invalidReason(t);
+  const cancel=(t,stage)=>{clearMemory();phase('waiting',stage+' cancelled: '+(invalidReason(t)||'capture state changed'));return empty();};
   const empty=()=>({data:{text:'',confidence:0}});
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function snapshot(){
@@ -128,15 +137,15 @@
     const read=w.recognize.bind(w);
     const wrappedRead=async function(input,...args){
       const t=tokens.get(input);if(!t)return read(input,...args);
-      tokens.delete(input);if(!valid(t)){phase('waiting','Capture cancelled: camera or geometry changed');return empty();}
-      if(root.RiftTrackerV07){t.tracker=root.RiftTrackerV07.begin();if(!t.tracker){clearMemory();phase('held','Tracker waiting for card replacement or alignment');return empty();}if(!valid(t)){clearMemory();phase('waiting','Tracker or camera changed');return empty();}}
+      tokens.delete(input);if(!valid(t))return cancel(t,'Capture');
+      if(root.RiftTrackerV07){t.tracker=root.RiftTrackerV07.begin();if(!t.tracker){clearMemory();const held=hasCandidate&&!!locked;phase(held?'held':'waiting',held?'Tracker waiting for card replacement or alignment':'Tracker aligning first card');return empty();}if(!valid(t))return cancel(t,'Capture');}
       // The base loop has already processed the previous result by the time this batch begins.
       // Capture its genuine candidate before an unreadable result clears it.
       if(retentionOn()&&lastAccepted&&candidate?.k===lastAccepted.key&&Number.isInteger(candidate.n)&&candidate.n>0&&candidate.k!==locked&&lastAccepted.session===session(t)&&lastAccepted.lock===locked){
         if(!memory||memory.key!==candidate.k||candidate.n>memory.candidate.n){memory={...lastAccepted,candidate:{...candidate},misses:0};}
       }else if(!retentionOn()||lastAccepted&&(lastAccepted.session!==session(t)||lastAccepted.lock!==locked||lastAccepted.key===locked))clearMemory();
       batches++;const started=performance.now();note('Collecting four frames…');phase('capturing','0/4 frames captured');
-      const frames=await capture(t);if(!valid(t)){phase('waiting','Capture cancelled: camera or geometry changed');return empty();}
+      const frames=await capture(t);if(!valid(t))return cancel(t,'Capture');
       const selection=choose(frames);
       // Prefer four frames; after the deadline, accept two or more agreeing distinct samples.
       if(!selection||selection.eligible<2||selection.best.quality.score<1.5){clearMemory();skipped++;
@@ -151,7 +160,7 @@
       submitted++;phase('reading',`OCR batch ${submitted} · ${eligible}/${frames.length} stable frames`);note(`Batch ${batches}: selected frame ${frames.indexOf(best)+1}/4 · quality ${best.quality.score.toFixed(1)} · ${eligible} stable · ${Math.round(performance.now()-started)}ms capture`);
       // Retain the existing OCR worker, preprocessing fallbacks, confidence and save/duplicate rules.
       let result;try{result=await read(prepared,...args);}catch(e){phase('error','OCR error: '+e.message);throw e;}
-      if(!valid(t)){clearMemory();phase('waiting','OCR cancelled: camera or tracker changed');return empty();}
+      if(!valid(t))return cancel(t,'OCR');
       // Initial reads are not gated by artwork. Still reject a stale ID crop, including
       // when confirmation memory is disabled. Compare against the frozen best frame.
       if(t.tracker?.phase==='initial'){const live=snapshot();if(!live||difference(best.quality,live.quality)>12){clearMemory();phase('waiting','ID crop changed during OCR');return empty();}}
