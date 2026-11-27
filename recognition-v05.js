@@ -36,11 +36,7 @@
       await video.play();
       if (!sameSession(id)) return;
       const t = trackNow(), caps = capabilities(t);
-      if (caps.focusMode?.includes('continuous')) {
-        try { const previous = t.getConstraints?.() || request.video;
-          await t.applyConstraints({...previous, advanced:[...(previous.advanced || []),{focusMode:'continuous'}]});
-        } catch (_) { /* focus remains a best-effort request */ }
-      }
+      await initializeCameraFocus(t);
       if (!sameSession(id)) return;
       torchOn = false; $('torch').textContent = 'Light'; $('torch').disabled = !caps.torch;
       await refreshCamera();
