@@ -26,10 +26,11 @@
   <script defer src="app.js?v=05"></script>
   <script defer src="camera-v03.js?v=03"></script>
   <script defer src="recognition-v05.js?v=05"></script>
+  <script defer src="best-frame-v055.js?v=055r2"></script>
 </head>
 <body>
 <main>
-  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.5 · performance lab</span></header>
+  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.5.5 · loading</span></header>
   <div class="layout">
     <div>
       <section id="scannerSection">
@@ -63,7 +64,7 @@
         <p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
         <div class="status" id="status" role="status">Camera off.</div>
         <div class="lastScan" id="lastScan"><small>Last automatic save</small><br><b id="lastScanCode">No cards scanned yet</b><p class="foot" id="lastScanInfo">Your saved card will stay visible here while you scan the next one.</p></div>
-        <div id="liveOCR" class="ocrPanel"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Foil score is experimental, not a probability.</p></div>
+        <div id="liveOCR" class="ocrPanel"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><div id="bestFrameControls"><label for="bestFrameEnabled"><input id="bestFrameEnabled" type="checkbox" checked disabled style="width:auto"> Best of 4 frames</label><p class="foot" id="bestFrameV055" role="status">Best-frame module not loaded yet. Original scanner is unchanged.</p></div><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Best-frame quality is a relative image score, not OCR confidence. Foil score is experimental, not a probability.</p></div>
         <div class="row"><button class="primary grow" id="start">Start camera</button><button id="stop" disabled>Stop</button><button id="torch" disabled>Light</button></div>
         <div class="row" style="margin-top:10px"><button id="next" class="grow" disabled>Ready for next card</button><label><input type="checkbox" id="sound" checked style="width:auto"> Sound</label></div>
         <details id="performancePanel"><summary>Session performance</summary>
