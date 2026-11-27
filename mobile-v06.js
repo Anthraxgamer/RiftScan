@@ -88,6 +88,7 @@ function tick(){
   if(isPaused){phase('waiting','PAUSED');return;}
   if(isAdjusting){phase('waiting','ADJUSTING CAMERA');return;}
   if(/^Scan error|^Could not start/i.test(status)){phase('warning','SCAN ERROR');return;}
+  if(el('bestFrameEnabled')?.checked&&globalThis.RiftCapture0731?.phase==='retry'){phase('warning','RETRY CAPTURE');return;}
   if(recentId&&!forceNext&&(performance.now()-receiptAt<1500||sameLock&&!checking)){const saved=receipt.dataset.saved==='true';phase(saved?'saved':'warning',saved?`✓ SAVED · ${recentKey}`:'ADDED · STORAGE WARNING');return;}
   if(checking){phase('confirming',`CONFIRMING · ${checking[1]}`);return;}
   const capture=globalThis.RiftCapture0731;
@@ -99,7 +100,6 @@ function tick(){
       const saved=lock&&cards().some(c=>keyOf(c)===lock);
       phase('waiting',saved?'WAITING FOR NEXT CARD':lock?'REPLACE CARD / NEXT':'ALIGN / HOLD STEADY');return;
     }
-    if(capture.phase==='retry'){phase('warning','RETRY CAPTURE');return;}
     if(capture.phase==='error'){phase('warning','OCR ERROR');return;}
     if(capture.phase==='waiting'){phase('waiting','ALIGN / HOLD STEADY');return;}
   }
