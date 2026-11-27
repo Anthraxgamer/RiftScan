@@ -33,7 +33,16 @@
 #diagnosticsV06{margin-top:10px}#diagnosticsV06 #liveOCR{margin:8px 0 0}#status{min-height:0;padding:5px 0;font-size:13px}#lastScan{margin:8px 0}#collectionToolsV06{margin-top:12px}#collectionToolsV06 details{margin-top:0}#v06Compatibility{color:#f6d58a;font-size:12px}
 @media(max-width:599px){.cameraWorkspace.panelClosed{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}#collectionPanel{padding:5px;gap:5px}#collectionPanel h2{font-size:13px}#collectionPanel .stats{gap:3px}#collectionPanel .stats strong{font-size:17px}#collectionPanel .stats small{font-size:9px}#collectionPanel #undo{min-height:30px}#collectionPanel .row{gap:3px}#receiptTitle{font-size:17px}}
 @media(prefers-reduced-motion:no-preference){#receiptV06.flash{animation:receiptFlash .45s ease-out}@keyframes receiptFlash{from{box-shadow:0 0 0 4px #75e1bf9c}to{box-shadow:0 0 0 0 transparent}}}
-#trackerOverlayV07{position:absolute;inset:0;pointer-events:none;z-index:2} .v07zone{position:absolute;border:1px dashed #efc36d;border-radius:3px;pointer-events:none}.v07zone.moving{border:2px solid #65e8ae}.v07zone[data-lost=true]{border-color:#ef8585;opacity:.5}#trackerInfoV07{font-size:13px;color:#a3e8d0;margin:5px 0;min-height:1.5em}#trackerStatsV07{font-size:11px;color:#a4b0c0}#trackerOverlayV07[data-phase=departed] .moving{opacity:.25} </style>
+#trackerOverlayV07{position:absolute;inset:0;pointer-events:none;z-index:2} .v07zone{position:absolute;border:1px dashed #efc36d;border-radius:3px;pointer-events:none}.v07zone.moving{border:2px solid #65e8ae}.v07zone[data-lost=true]{border-color:#ef8585;opacity:.5}#trackerInfoV07{font-size:13px;color:#a3e8d0;margin:5px 0;min-height:1.5em}#trackerStatsV07{font-size:11px;color:#a4b0c0}#trackerOverlayV07[data-phase=departed] .moving{opacity:.25} 
+/* V0.7.1: adjustable geometry, with stationary calibration previews. */
+#view[data-calibrating=true] #guide{border-color:#efc36d;box-shadow:0 0 0 500px #0003}
+#view[data-calibrating=true] #target{border-color:#f6d58a}
+#calArtV071{position:absolute;border:2px dashed #65e8ae;border-radius:4px;pointer-events:none;z-index:3}
+#zoneSettingsV071{border:1px solid #40516a;border-radius:8px;padding:7px;min-width:0}
+#zoneSettingsV071 label{margin:6px 0}#zoneSettingsV071 input[type=range]{display:block;padding:0;min-height:24px;accent-color:#8ce5c8}
+#zoneSettingsV071 output{float:right}#zoneSettingsV071 h3{font-size:12px;margin:10px 0 4px;color:#9be9d2}
+#calibrateV071{width:100%;margin-top:7px;min-height:38px}#zoneNoteV071{font-size:11px;color:#9be9d2}
+</style>
 <script defer="" src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
 <script defer="" src="core.js"></script>
 <script defer="" src="app.js?v=05"></script>
@@ -41,17 +50,18 @@
 <script defer="" src="recognition-v05.js?v=05"></script>
 <script defer="" src="best-frame-v055.js?v=070"></script>
 <script defer="" src="mobile-v06.js?v=070"></script>
-<script defer src="tracker-v07.js?v=070"></script></head>
+<script defer src="tracker-v07.js?v=071"></script>
+<script defer src="zones-v071.js?v=071"></script></head>
 <body>
 <main>
-<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7 · loading</span></header>
+<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7.1 · loading</span></header>
 <div class="layout">
 <div>
 <section id="scannerSection">
 <div class="cameraWorkspace" id="cameraWorkspace">
 <div class="view" id="view">
 <video autoplay="" id="video" muted="" playsinline=""></video>
-<div class="guide" id="guide"><div class="target" id="target"><span>COLLECTOR NUMBER</span></div><div id="trackerOverlayV07" hidden aria-hidden="true"><i class="v07zone" id="v07-art-fixed"></i><i class="v07zone moving" id="v07-art-moving"></i><i class="v07zone" id="v07-id-fixed"></i><i class="v07zone moving" id="v07-id-moving"></i></div></div>
+<div class="guide" id="guide"><div class="target" id="target"><span>COLLECTOR NUMBER</span></div><div id="calArtV071" hidden aria-hidden="true"></div><div id="trackerOverlayV07" hidden aria-hidden="true"><i class="v07zone" id="v07-art-fixed"></i><i class="v07zone moving" id="v07-art-moving"></i><i class="v07zone" id="v07-id-fixed"></i><i class="v07zone moving" id="v07-id-moving"></i></div></div>
 <div class="empty" id="empty">Start your camera to scan.<br/>Align one upright card with the green outline.</div>
 <div aria-hidden="true" data-phase="waiting" id="scanBadge">WAITING FOR CARD</div></div>
 <section aria-label="Camera settings" class="cameraControls" hidden="" id="cameraPanel">
@@ -67,7 +77,7 @@
 <label hidden="" id="zoomRow">Camera zoom <output id="zoomValue"></output><input id="zoom" type="range"/></label>
 <label hidden="" id="focusRow">Focus mode<select id="focusMode"></select></label>
 <label hidden="" id="distanceRow">Manual focus distance <output id="distanceValue"></output><input id="focusDistance" type="range"/></label>
-<label>Collector box vertical position<input id="targetOffset" max="18" min="0" type="range" value="3"/></label>
+<details id="zoneSettingsV071"><summary>Zone calibration</summary><p class="foot">Scanning pauses while editing. Fit the outside outline to the card first, then place the gold box around the entire collector ID. Green dashed = artwork / future foil region.</p><h3>Outer card outline</h3><label>Card outline size <output id="out-guideWidth">90%</output><input id="zone-guideWidth" type="range" min="55" max="96" value="90"></label><label>Card horizontal position <output id="out-guideX">50%</output><input id="zone-guideX" type="range" min="0" max="100" value="50"></label><label>Card vertical position <output id="out-guideY">50%</output><input id="zone-guideY" type="range" min="0" max="100" value="50"></label><h3>Collector ID region</h3><label>ID horizontal position <output id="out-idLeft">5%</output><input id="zone-idLeft" type="range" min="0" max="85" value="5"></label><label>ID width <output id="out-idWidth">58%</output><input id="zone-idWidth" type="range" min="15" max="95" value="58"></label><label>ID height <output id="out-idHeight">15%</output><input id="zone-idHeight" type="range" min="5" max="30" value="15"></label><label>Collector box vertical position<input id="targetOffset" max="18" min="0" type="range" value="3"/></label><h3>Artwork / foil region</h3><label>Artwork horizontal position <output id="out-artLeft">14%</output><input id="zone-artLeft" type="range" min="0" max="85" value="14"></label><label>Artwork vertical position <output id="out-artTop">12%</output><input id="zone-artTop" type="range" min="0" max="85" value="12"></label><label>Artwork width <output id="out-artWidth">72%</output><input id="zone-artWidth" type="range" min="15" max="100" value="72"></label><label>Artwork height <output id="out-artHeight">49%</output><input id="zone-artHeight" type="range" min="15" max="85" value="49"></label><button id="resetZonesV071" type="button">Reset zone defaults</button><p id="zoneNoteV071" role="status">Settings stay on this device.</p><button id="doneZonesV071" type="button">Done · show collection</button></details>
 <div class="row"><button disabled="" id="pauseScan">Pause scanning</button><button disabled="" id="photoScan">Capture &amp; scan photo</button></div>
 <details open=""><summary>Raw collector-number preview</summary><canvas id="rawPreview"></canvas><p class="foot">Unprocessed crop. Adjust alignment and focus until text is readable.</p></details>
 <p class="foot">Resolution and FPS are requests, not guarantees. Unsupported controls are hidden. Pause scanning before adjusting the card or camera.</p>
@@ -81,7 +91,7 @@
 </section></div><div aria-atomic="true" aria-live="polite" id="receiptV06" role="status"><div id="receiptTitle">No new card saved</div><div id="receiptDetail">Wait for CARD SAVED before moving to the next card.</div></div><p id="trackerInfoV07" role="status">Tracker loading…</p><p id="trackerStatsV07">0 samples · 0 auto rearms · 0 OCR batches avoided</p><div class="row"><button class="primary grow" id="start">Start camera</button><button disabled="" id="stop">Stop</button><button disabled="" id="torch">Light</button></div><div class="row" style="margin-top:10px"><button class="grow" disabled="" id="next">Ready for next card</button><label><input checked="" id="sound" style="width:auto" type="checkbox"/> Sound</label><label><input checked="" id="hapticV06" style="width:auto" type="checkbox"/> Vibrate</label></div>
 <div class="row cameraQuick"><button disabled="" id="autofocus">Auto focus</button><button aria-controls="cameraPanel collectionPanel" aria-expanded="false" id="toggleCameraPanel">Camera settings</button></div>
 <div class="row cameraQuick"><button id="applyCamera">Apply / restart camera</button><button disabled="" id="scanToggleV4">Pause scanning</button></div>
-<p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
+<button id="calibrateV071" type="button">Calibrate scan zones</button><p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
 <div class="status" id="status" role="status">Camera off.</div>
 
 <details id="diagnosticsV06"><summary>OCR diagnostics · best-frame preview</summary><div class="ocrPanel" id="liveOCR"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><div id="bestFrameControls"><label for="bestFrameEnabled"><input checked="" disabled="" id="bestFrameEnabled" style="width:auto" type="checkbox"/> Best of 4 frames</label><p class="foot" id="bestFrameV055" role="status">Best-frame module not loaded yet. Original scanner is unchanged.</p></div><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Best-frame quality is a relative image score, not OCR confidence. Foil score is experimental, not a probability.</p></div><div class="lastScan" id="lastScan"><small>Last automatic save</small><br/><b id="lastScanCode">No cards scanned yet</b><p class="foot" id="lastScanInfo">Your saved card will stay visible here while you scan the next one.</p></div></details>
