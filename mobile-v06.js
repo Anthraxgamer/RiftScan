@@ -90,8 +90,16 @@ function tick(){
   if(/^Scan error|^Could not start/i.test(status)){phase('warning','SCAN ERROR');return;}
   if(recentId&&!forceNext&&(performance.now()-receiptAt<1500||sameLock&&!checking)){const saved=receipt.dataset.saved==='true';phase(saved?'saved':'warning',saved?`✓ SAVED · ${recentKey}`:'ADDED · STORAGE WARNING');return;}
   if(checking){phase('confirming',`CONFIRMING · ${checking[1]}`);return;}
-  if(/^Collecting four|^Waiting for steady/i.test(frame)){phase('capturing','CAPTURING IMAGE');return;}
-  if(/^Reading/i.test(ocr)){phase('reading','READING CARD');return;}
+  const capture=globalThis.RiftCapture0731;
+  if(el('bestFrameEnabled')?.checked&&capture){
+    if(capture.phase==='capturing'){phase('capturing','CAPTURING IMAGE');return;}
+    if(capture.phase==='reading'){phase('reading','READING CARD');return;}
+    if(capture.phase==='held'){phase('waiting','WAITING FOR NEXT CARD');return;}
+    if(capture.phase==='error'){phase('warning','OCR ERROR');return;}
+    if(capture.phase==='waiting'){phase('waiting','ALIGN / HOLD STEADY');return;}
+  }
+  if(/^Reading/i.test(ocr)&&(!el('bestFrameEnabled')?.checked||!capture||capture.phase!=='complete')){phase('reading','READING CARD');return;}
+  if(!capture&&/^Collecting four|^Waiting for steady/i.test(frame)){phase('capturing','CAPTURING IMAGE');return;}
   phase('waiting','ALIGN CARD');
 }
 // Original render may be wrapped by V0.5 or invoked via event handlers; observe its output, not its implementation.

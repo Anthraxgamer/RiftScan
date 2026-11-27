@@ -51,8 +51,8 @@
 <script defer="" src="app.js?v=05"></script>
 <script defer="" src="camera-v03.js?v=03"></script>
 <script defer="" src="recognition-v05.js?v=05"></script>
-<script defer="" src="best-frame-v055.js?v=072"></script>
-<script defer="" src="mobile-v06.js?v=070"></script>
+<script defer="" src="best-frame-v055.js?v=0731"></script>
+<script defer="" src="mobile-v06.js?v=0731"></script>
 <script defer="" src="tracker-v07.js?v=072"></script>
 <script defer="" src="zones-v071.js?v=073"></script><style>/* V0.7.3: full-screen video is independent of overlay dimensions. */
 #homeLaunch073{display:grid;gap:12px;padding:12px 0 16px}#homeLaunch073 p{color:#b9c5d3}#homeLaunch073 #start{font-size:20px;min-height:64px}
@@ -68,7 +68,8 @@ body.immersiveActive073{overflow:hidden;overscroll-behavior:none}
 .immersive073 #cameraPanel{position:absolute;z-index:7;top:var(--overlayTop073,90px);bottom:max(8px,env(safe-area-inset-bottom));right:max(8px,env(safe-area-inset-right));width:min(92%,400px);max-height:none;background:#101620f0;box-shadow:0 10px 40px #0009;padding:12px}.immersive073 #cameraPanel label{font-size:13px}.immersive073 #cameraPanel button{font-size:13px}.immersive073 #view[data-calibrating=true]~#cameraPanel{top:auto;height:clamp(180px,27dvh,230px);left:max(8px,env(safe-area-inset-left));width:auto}.immersive073 #view[data-calibrating=true]~#scanBottom073{visibility:hidden}.immersive073 #cameraPanel h3{font-size:14px}.immersive073 #cameraPanel #rawPreview{max-height:130px;object-fit:contain}.immersive073 #cameraPanel #recognitionSettings073{border-top:1px solid #40516a;padding-top:12px}
 .immersive073 #scanBottom073.expanded073{height:min(62dvh,480px);z-index:6}.immersive073 #scanBottom073.expanded073 #collectionPanel{background:#101620f2}
 @media(orientation:landscape) and (min-width:600px){.immersive073 #scanBottom073{left:auto;width:clamp(230px,28vw,350px);height:clamp(170px,65dvh,300px)}.immersive073 #view[data-calibrating=true]~#cameraPanel{left:auto;width:clamp(230px,28vw,350px);height:clamp(170px,65dvh,300px)}.immersive073 #scanBottom073.expanded073{height:min(75dvh,480px)}}
-</style><script defer="" src="immersive-v073.js?v=073"></script></head>
+#captureDiag0731{position:absolute;top:100%;left:0;right:0;text-align:center;font-size:10px;line-height:1.2;color:#fff;background:#101620b8;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;pointer-events:none}
+</style><script defer="" src="immersive-v073.js?v=0731"></script></head>
 <body>
 <main>
 <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7.3 · loading</span></header>
@@ -111,7 +112,7 @@ body.immersiveActive073{overflow:hidden;overscroll-behavior:none}
 <label>Consistent readings<select id="reads"><option value="2">2 · recommended</option><option value="3">3 · cautious</option><option value="1">1 · faster, less reliable</option></select></label><label><input checked="" id="retainV06" style="width:auto" type="checkbox"> Retain matching readings through brief OCR failures (best-frame only)</input></label><p class="foot" id="retainInfoV06">Experimental: same-looking crop, up to 2 misses / 8 seconds. Never counts an unreadable frame as a match.</p>
 <p class="foot">Open OCR diagnostics to inspect the selected image and recognition attempts.</p>
 </div></div></section>
-<div id="scanTop073"><div id="toolbar073"><button disabled="" id="stop">Stop scan</button><button disabled="" id="autofocus">Focus</button><button disabled="" id="torch">Light</button><button aria-controls="cameraPanel collectionPanel" aria-expanded="false" id="toggleCameraPanel">Camera settings</button><button id="calibrateV071" type="button">Calibrate</button></div><div aria-hidden="true" data-phase="waiting" id="scanBadge">WAITING FOR CARD</div></div><div id="scanBottom073"><div aria-atomic="true" aria-live="polite" id="receiptV06" role="status"><div id="receiptTitle">No new card saved</div><div id="receiptDetail">Wait for CARD SAVED before moving to the next card.</div></div><div class="row" id="scanQuick073"><button id="quickPause073" type="button">Pause</button><button id="quickNext073" type="button">Next card</button><button id="quickCollection073" type="button">Expand list</button></div><section aria-label="Live collection" class="stack" id="collectionPanel">
+<div id="scanTop073"><div id="toolbar073"><button disabled="" id="stop">Stop scan</button><button disabled="" id="autofocus">Focus</button><button disabled="" id="torch">Light</button><button aria-controls="cameraPanel collectionPanel" aria-expanded="false" id="toggleCameraPanel">Camera settings</button><button id="calibrateV071" type="button">Calibrate</button></div><div aria-hidden="true" data-phase="waiting" id="scanBadge">WAITING FOR CARD</div><div id="captureDiag0731" role="status">Waiting for camera</div></div><div id="scanBottom073"><div aria-atomic="true" aria-live="polite" id="receiptV06" role="status"><div id="receiptTitle">No new card saved</div><div id="receiptDetail">Wait for CARD SAVED before moving to the next card.</div></div><div class="row" id="scanQuick073"><button id="quickPause073" type="button">Pause</button><button id="quickNext073" type="button">Next card</button><button id="quickCollection073" type="button">Expand list</button></div><section aria-label="Live collection" class="stack" id="collectionPanel">
 <div class="row spread"><h2>Collection</h2><button disabled="" id="undo">Undo</button></div>
 <div class="stats"><div><strong id="total">0</strong><small>Cards</small></div><div><strong id="unique">0</strong><small>IDs</small></div><div><strong class="warn" id="pending">0</strong><small>Review</small></div></div>
 <div aria-live="polite" id="list"></div>
