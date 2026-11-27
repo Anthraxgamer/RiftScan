@@ -67,10 +67,20 @@ function mergedCameraConstraints(track, values={}) {
   return next;
 }
 const cameraFocusReports=new WeakMap();
+function focusChoices(caps,actual){
+  const modes=Array.isArray(caps?.focusMode)?[...new Set(caps.focusMode.filter(m=>typeof m==='string'&&m))]:[];
+  const automatic=modes.some(m=>m==='continuous'||m==='single-shot');
+  return {modes,automatic,actual:typeof actual==='string'&&actual?actual:'unknown'};
+}
+function focusDescription(caps,actual){
+  const f=focusChoices(caps,actual);
+  return 'Active focus: '+f.actual+' · Available: '+(f.modes.join(', ')||'not reported')+
+    (f.automatic?'':' · No autofocus mode exposed. Reset focus or select another rear camera.');
+}
 async function initializeCameraFocus(track){
   const caps=capabilities(track), modes=Array.isArray(caps.focusMode)?caps.focusMode:[];
   const mode=modes.includes('continuous')?'continuous':modes.includes('single-shot')?'single-shot':null;
-  let report='Autofocus control not exposed. Check sharpness or try another camera.';
+  let report=focusDescription(caps,track.getSettings?.().focusMode);
   if(mode){
     try{
       let firstError;
@@ -92,15 +102,18 @@ async function initializeCameraFocus(track){
 }
 
 function capabilities(t){try{return t?.getCapabilities?.()||{};}catch(e){return {};}}
-function diagnostics(){const t=trackNow();if(!t)return;const s=t.getSettings?.()||{}; $('cameraInfo').textContent=`Actual video: ${video.videoWidth||s.width||'?'} × ${video.videoHeight||s.height||'?'} | ${s.frameRate?Math.round(s.frameRate)+' FPS':'FPS unknown'} | ${s.focusMode||'focus mode unavailable'}${s.zoom!=null?' | zoom '+s.zoom+'×':''} | ${t.label||'Camera'}`;}
+function diagnostics(){const t=trackNow();if(!t)return;const s=t.getSettings?.()||{};const info=$('focusCapabilities0733');if(info)info.textContent=focusDescription(capabilities(t),s.focusMode); $('cameraInfo').textContent=`Actual video: ${video.videoWidth||s.width||'?'} × ${video.videoHeight||s.height||'?'} | ${s.frameRate?Math.round(s.frameRate)+' FPS':'FPS unknown'} | ${s.focusMode||'focus mode unavailable'}${s.zoom!=null?' | zoom '+s.zoom+'×':''} | ${t.label||'Camera'}`;}
 function rangeControl(row,id,valueId,cap,value){const ok=cap&&Number.isFinite(cap.min)&&Number.isFinite(cap.max)&&cap.max>cap.min;$(row).hidden=!ok;if(!ok)return;const el=$(id);el.min=cap.min;el.max=cap.max;el.step=cap.step>0?cap.step:'any';el.value=Number.isFinite(value)?value:cap.min;$(valueId).textContent=el.value;}
 async function refreshCamera(){const t=trackNow();if(!t)return;const caps=capabilities(t),s=t.getSettings?.()||{};try{const devices=await navigator.mediaDevices.enumerateDevices();if(t!==trackNow())return;const sel=$('cameraSource');sel.replaceChildren(new Option('Automatic rear camera',''));let n=0;for(const d of devices.filter(d=>d.kind==='videoinput'))sel.add(new Option(d.label||`Camera ${++n}`,d.deviceId));if([...sel.options].some(o=>o.value===desiredSource))sel.value=desiredSource;else sel.value='';}catch(e){}
-if(t!==trackNow())return;rangeControl('zoomRow','zoom','zoomValue',caps.zoom,s.zoom);const modes=Array.isArray(caps.focusMode)?caps.focusMode:[];$('focusRow').hidden=!modes.length;$('focusMode').replaceChildren(...modes.map(m=>new Option(m,m)));if(modes.includes(s.focusMode))$('focusMode').value=s.focusMode;rangeControl('distanceRow','focusDistance','distanceValue',caps.focusDistance,s.focusDistance);if(s.focusMode!=='manual')$('distanceRow').hidden=true;$('pauseScan').disabled=false;$('photoScan').disabled=false;diagnostics();}
+if(t!==trackNow())return;rangeControl('zoomRow','zoom','zoomValue',caps.zoom,s.zoom);const f=focusChoices(caps,s.focusMode),select=$('focusMode');$('focusRow').hidden=false;
+const labels={continuous:'Auto · continuous', 'single-shot':'Auto · single shot',manual:'Manual',none:'None'};
+select.replaceChildren(new Option('Reset to camera default (reopen)','camera-default'),...f.modes.map(m=>new Option(labels[m]||m,m)));
+if(!f.modes.includes(f.actual)){const o=new Option('Current: '+f.actual+' (not selectable)','reported-current');o.disabled=true;select.add(o);select.value='reported-current';}else select.value=f.actual;rangeControl('distanceRow','focusDistance','distanceValue',caps.focusDistance,s.focusDistance);if(s.focusMode!=='manual')$('distanceRow').hidden=true;$('pauseScan').disabled=false;$('photoScan').disabled=false;diagnostics();}
 function invalidate(){cameraEpoch++;candidate=null;history=[];absent=0;}
 async function changeTrack(values){const t=trackNow();if(!t||adjusting)return;adjusting=true;invalidate();try{await t.applyConstraints(mergedCameraConstraints(t,values));if(t!==trackNow())return;const s=t.getSettings?.()||{};const mismatch=Object.entries(values).some(([k,v])=>s[k]!=null&&(typeof v==='number'?Math.abs(s[k]-v)>.01:s[k]!==v));camMessage(mismatch?'Browser did not apply the exact requested setting.':'Camera setting requested.');}catch(e){camMessage('Setting unavailable: '+e.message);}finally{if(t===trackNow()){adjusting=false;await refreshCamera();}}}
 $('profile').onchange=()=>{setPreset();saveCamera();};for(const k of ['resolution','fps'])$(k).onchange=()=>{$('profile').value='custom';saveCamera();};$('cameraSource').onchange=()=>{desiredSource=$('cameraSource').value;saveCamera();};
 $('targetOffset').oninput=()=>{$('target').style.bottom=$('targetOffset').value+'%';invalidate();saveCamera();};$('target').style.bottom=$('targetOffset').value+'%';
-$('zoom').oninput=()=>{$('zoomValue').textContent=$('zoom').value+'×';};$('zoom').onchange=()=>changeTrack({zoom:Number($('zoom').value)});$('focusMode').onchange=()=>changeTrack({focusMode:$('focusMode').value});$('focusDistance').oninput=()=>{$('distanceValue').textContent=$('focusDistance').value;};$('focusDistance').onchange=()=>changeTrack({focusMode:'manual',focusDistance:Number($('focusDistance').value)});
+$('zoom').oninput=()=>{$('zoomValue').textContent=$('zoom').value+'×';};$('zoom').onchange=()=>changeTrack({zoom:Number($('zoom').value)});$('focusMode').onchange=()=>{const value=$('focusMode').value;if(value==='camera-default'){$('applyCamera').click();return;}if(value==='reported-current')return;changeTrack({focusMode:value});};$('focusDistance').oninput=()=>{$('distanceValue').textContent=$('focusDistance').value;};$('focusDistance').onchange=()=>changeTrack({focusMode:'manual',focusDistance:Number($('focusDistance').value)});
 $('pauseScan').onclick=()=>{paused=!paused;invalidate();$('pauseScan').textContent=paused?'Resume scanning':'Pause scanning';status(paused?'Scanning paused. Adjust camera or card.':'Scanning resumed.');};
 $('applyCamera').onclick=async()=>{saveCamera();if(!stream){camMessage('Settings saved. Start camera to apply.');return;}const t=trackNow();if(adjusting)return;adjusting=true;invalidate();try{const req=cameraRequest().video;const current=t.getSettings?.()||{};if(desiredSource!==openedSource){// restart through normal lifecycle, waiting for outstanding recognition
 stop();const restartRun=run;while(busy&&run===restartRun)await delay(50);if(run===restartRun)void start();return;}
