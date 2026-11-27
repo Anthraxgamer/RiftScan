@@ -82,7 +82,7 @@
   document.getElementById('next')?.addEventListener('click',()=>{generation++;clearMemory();},true);
   enabled.addEventListener?.('change',()=>{generation++;clearMemory();note(enabled.checked?'Best-frame enabled':'Original recognition enabled');});
   const note=s=>{info.textContent=`${s} · ${captures} frames / ${submitted} OCR batches / ${skipped} skipped`;};
-  const valid=t=>t.id===run&&t.epoch===cameraEpoch&&t.generation===generation&&!!stream&&!paused&&!adjusting&&!document.hidden;
+  const valid=t=>t.id===run&&t.epoch===cameraEpoch&&t.generation===generation&&!!stream&&!paused&&!adjusting&&!document.hidden&&(!t.tracker||root.RiftTrackerV07?.valid(t.tracker));
   const empty=()=>({data:{text:'',confidence:0}});
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function snapshot(){
@@ -122,6 +122,7 @@
     const wrappedRead=async function(input,...args){
       const t=tokens.get(input);if(!t)return read(input,...args);
       tokens.delete(input);if(!valid(t))return empty();
+      if(root.RiftTrackerV07){t.tracker=root.RiftTrackerV07.begin();if(!t.tracker){clearMemory();return empty();}if(!valid(t)){clearMemory();return empty();}}
       // The base loop has already processed the previous result by the time this batch begins.
       // Capture its genuine candidate before an unreadable result clears it.
       if(retentionOn()&&lastAccepted&&candidate?.k===lastAccepted.key&&Number.isInteger(candidate.n)&&candidate.n>0&&candidate.k!==locked&&lastAccepted.session===session(t)&&lastAccepted.lock===locked){
@@ -148,7 +149,7 @@
         // Check the live crop after OCR as well, only for evidence retention. An actual
         // save still follows the base scanner's rules. No synthetic OCR result is created.
         const live=snapshot();
-        if(!live||difference(best.quality,live.quality)>12){clearMemory();}
+        if(!live||difference(best.quality,live.quality)>12){clearMemory();if(t.tracker&&!t.tracker.bypass)return empty();}
         else if(k){
           if(memory&&memory.key===k&&k!==locked&&memory.misses>0&&canRetain(memory,current,performance.now())&&(!candidate||candidate.k===k&&candidate.n<memory.candidate.n)){
             try{candidate={...memory.candidate};retentionNote(`Retained ${candidate.n} prior matching read(s) for ${k} across ${memory.misses} miss(es).`);}catch(_){clearMemory();}
