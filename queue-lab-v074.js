@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id),Q=RiftQueue,C=RiftCore,v=$('video');
-let db=null,stream=null,epoch=0,opening=false,capturing=false,held=false,base=null,previous=null,stable=0,empty=0,presentSince=0,detectBusy=false;
+let db=null,stream=null,epoch=0,opening=false,capturing=false,storing=false,held=false,base=null,previous=null,stable=0,empty=0,presentSince=0,detectBusy=false;
 let jobs=[],storageError='',pendingStore=null,worker=null,processing=false,workerPaused=false,active=true,reviewId=null,reviewURL=null,releaseLock=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),state=s=>$('state').textContent=s,work=s=>$('workerState').textContent=s;
 const track=()=>stream?.getVideoTracks()[0];
@@ -12,7 +12,7 @@ function controls(){
  $('focus').disabled=!camera||capturing;$('capture').disabled=!db||!camera||capturing||held||full||!!pendingStore||!!storageError;
  $('arm').disabled=!camera||capturing||!!pendingStore||!held;
  $('calibrate').disabled=!camera||capturing||!!pendingStore||held;
- $('auto').disabled=!base||!camera||!!pendingStore;$('retryStore').disabled=!pendingStore||capturing;
+ $('auto').disabled=!base||!camera||!!pendingStore;$('retryStore').disabled=!pendingStore||capturing||storing;
  $('resume').disabled=!db||processing;$('export').disabled=!db||!jobs.length;
 }
 function clearDetection(){base=null;previous=null;stable=empty=0;presentSince=0;$('auto').checked=false;$('detect').textContent='Not calibrated';}
@@ -77,16 +77,17 @@ async function capture(){
  capturing=true;controls();const token=epoch;let frames=[],last=null;
  const settings={sets:$('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean),threshold:Math.min(90,Math.max(40,Number($('threshold').value)||50))};
  try{
-  const start=performance.now();
+  const start=performance.now(),geometry=()=>rect('idZone').map(n=>Math.round(n*2)/2).join(':')+':'+v.videoWidth+':'+v.videoHeight,initialGeometry=geometry();
   while(frames.length<4&&performance.now()-start<700&&token===epoch){
+   if(geometry()!==initialGeometry)throw Error('Crop geometry changed; align and capture again');
    const key=stamp();
-   if(v.readyState>=2&&key!==last){last=key;const native=rect('idZone');const id=crop('idZone',Math.max(1,Math.min(1200,Math.round(native[2])))),art=crop('artZone',128);const quality=score(id);frames.push({id,art,quality,stamp:key});state('Capturing '+frames.length+'/4');}
+   if(v.readyState>=2&&key!==last){last=key;const native=rect('idZone');const id=crop('idZone',Math.max(1,Math.min(1200,Math.round(native[2])))),art=crop('artZone',128);const quality=score(id);frames.push({id,art,quality,stamp:key,thumb:frames.length?null:crop('guide',180)});state('Capturing '+frames.length+'/4');}
    if(frames.length<4)await sleep(70);
   }
-  if(token!==epoch)throw Error('Camera changed before capture finished; nothing queued');
+  if(token!==epoch||geometry()!==initialGeometry)throw Error('Camera changed before capture finished; nothing queued');
   if(!frames.length)throw Error('No usable camera frame');
   // Keep two highest-quality distinct ID images, plus all available artwork samples.
-  const thumb=crop('guide',180);
+  const thumb=frames[0].thumb;
   const ranked=[...frames].sort((a,b)=>b.quality.sharp-a.quality.sharp);
   const images=await Promise.all(ranked.slice(0,2).map(f=>blob(f.id)));
   const art=await Promise.all(frames.map(f=>blob(f.art,'image/jpeg',.8)));
@@ -97,7 +98,8 @@ async function capture(){
  finally{capturing=false;controls();}
 }
 async function storePending(){
- if(!pendingStore)return;
+ if(!pendingStore||storing)return;
+ storing=true;controls();
  try{
   const job=pendingStore,result=await Q.enqueue(db,job);
   if(result!=='ok'&&result!=='duplicate'){state('Queue full. Image held in memory; retry storage after resolving jobs.');return;}
@@ -106,7 +108,7 @@ async function storePending(){
   try{navigator.vibrate?.(70);}catch(_){}
   await refresh();state('Capture stored. You can replace the card now.');void pump();
  }catch(e){storageError=e.message;state('Storage error: '+e.message+' · Capture not confirmed; retry storage before leaving.');}
- finally{controls();}
+ finally{storing=false;controls();}
 }
 async function detect(){
  if(detectBusy||!base||!stream||opening||capturing||pendingStore||document.hidden)return;
@@ -134,6 +136,7 @@ async function getWorker(){
  const w=await Tesseract.createWorker('eng',1);
  try{await w.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/\\ .·•-'});worker=w;return w;}catch(e){await w.terminate();throw e;}
 }
+function bounded(promise,ms,label){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label+' timed out')),ms);})]).finally(()=>clearTimeout(timer));}
 async function recognize(job,w){
  const reads=[];
  for(const [i,image] of job.images.entries()){
@@ -157,8 +160,8 @@ async function pump(){
    if(!jobs.some(j=>j.state==='queued'))break;
    work('Loading / preparing OCR worker…');const w=await getWorker();if(!active)break;
    const job=await Q.claim(db);if(!job)break;await refresh();work('Processing '+job.id.slice(0,8)+' · camera remains independent');
-   try{const result=await recognize(job,w);if(!await Q.finish(db,job.id,'processing',result))throw Error('Job state changed');}
-   catch(e){await Q.finish(db,job.id,'processing',{state:'queued',note:'Processing interrupted: '+e.message});throw e;}
+   try{const result=await bounded(recognize(job,w),30000,'OCR job');if(!active)return;if(!await Q.finish(db,job.id,'processing',result))throw Error('Job state changed');}
+   catch(e){if(!active)return;await Q.finish(db,job.id,'processing',{state:'queued',note:'Processing interrupted: '+e.message});throw e;}
    await refresh();
   }
   if(!workerPaused)work('Queue drained or waiting for captures');
@@ -195,7 +198,8 @@ $('export').onclick=()=>{const data=jobs.map(({images,art,thumbnail,...j})=>j),u
 $('start').onclick=start;$('stop').onclick=stop;$('focus').onclick=focus;$('capture').onclick=capture;$('retryStore').onclick=storePending;
 $('arm').onclick=()=>{held=false;stable=empty=0;presentSince=0;state('Manually rearmed. Only use after physically replacing the card.');controls();};
 $('calibrate').onclick=()=>{try{base=sample();previous=base;stable=empty=0;presentSince=0;$('detect').textContent='Empty surface calibrated';controls();}catch(e){state(e.message);}};
-$('resume').onclick=()=>{workerPaused=false;void pump();};v.addEventListener('resize',layout);window.addEventListener('resize',()=>{layout();clearDetection();});
+$('resume').onclick=()=>{workerPaused=false;void pump();};v.addEventListener('resize',()=>{layout();clearDetection();});window.addEventListener('resize',()=>{layout();clearDetection();});
+window.addEventListener('beforeunload',e=>{if(pendingStore||capturing){e.preventDefault();e.returnValue='';}});
 window.addEventListener('pagehide',()=>{active=false;stop();closeReview();releaseLock?.();});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 setInterval(detect,100);controls();
