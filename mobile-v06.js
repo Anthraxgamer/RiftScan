@@ -104,7 +104,7 @@ function tick(){
     if(capture.phase==='waiting'){phase('waiting','ALIGN / HOLD STEADY');return;}
   }
   if(/^Reading/i.test(ocr)&&(!el('bestFrameEnabled')?.checked||!capture||capture.phase!=='complete')){phase('reading','READING CARD');return;}
-  if(!capture&&/^Collecting four|^Waiting for steady/i.test(frame)){phase('capturing','CAPTURING IMAGE');return;}
+  if(el('bestFrameEnabled')?.checked&&!capture&&/^(Collecting four|Waiting for steady)/i.test(frame)){phase('capturing','CAPTURING IMAGE');return;}
   phase('waiting','ALIGN CARD');
 }
 // Original render may be wrapped by V0.5 or invoked via event handlers; observe its output, not its implementation.
