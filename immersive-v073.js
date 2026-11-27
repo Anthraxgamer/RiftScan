@@ -31,20 +31,62 @@ $('calibrateV071').addEventListener('click',()=>setTimeout(()=>{pauseIfRunning()
 $('quickPause073').addEventListener('click',()=>{if(!settings.hidden)closeSettings();setExpanded(false);$('scanToggleV4').click();});
 $('quickNext073').addEventListener('click',()=>$('next').click());
 $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeSettings();setExpanded(!bottom.classList.contains('expanded073'));});
+
+ // Keep the original range input and its event handlers, but remove touch-to-jump.
+ // Native button activation happens on click, not touch-down; scrolling cannot set a value.
+ function nextRangeValue(current,min,max,step,direction){
+   const n=Number(current),lo=Number(min),hi=Number(max);
+   if(![n,lo,hi].every(Number.isFinite)||hi<=lo)return n;
+   const unit=Number(step)>0?Number(step):(hi-lo)/20;
+   const raw=Number((n+direction*unit).toPrecision(12));
+   return Math.min(hi,Math.max(lo,raw));
+ }
+ const rangeControls=[];
+ for(const range of document.querySelectorAll('input[type="range"]')){
+   const label=range.closest('label');
+   const name=label?.firstChild?.textContent.trim()||range.id;
+   const group=document.createElement('span');group.className='stepper0732';group.setAttribute('role','group');group.setAttribute('aria-label',name);
+   const minus=document.createElement('button'),plus=document.createElement('button'),value=document.createElement('output');
+   minus.type=plus.type='button';minus.textContent='−';plus.textContent='+';minus.setAttribute('aria-label','Decrease '+name);plus.setAttribute('aria-label','Increase '+name);
+   value.setAttribute('aria-live','off');group.append(minus,value,plus);range.after(group);range.hidden=true;range.tabIndex=-1;
+   const sync=()=>{
+     const n=Number(range.value),lo=Number(range.min||0),hi=Number(range.max||100);
+     const display=String(Number(n.toPrecision(8)));
+     if(value.textContent!==display)value.textContent=display;
+     const unavailable=range.disabled||!Number.isFinite(n)||hi<=lo||
+       (['zoom','focusDistance'].includes(range.id)&&(!trackNow()||adjusting));
+     minus.disabled=unavailable||n<=lo;plus.disabled=unavailable||n>=hi;
+   };
+   const bump=direction=>e=>{
+     e.preventDefault();e.stopPropagation();
+     if((direction<0?minus:plus).disabled)return;
+     const old=range.value;
+     range.value=String(nextRangeValue(old,range.min||0,range.max||100,range.step||1,direction));
+     if(range.value!==old){
+       range.dispatchEvent(new Event('input',{bubbles:true}));
+       range.dispatchEvent(new Event('change',{bubbles:true}));
+     }
+     sync();
+   };
+   minus.addEventListener('click',bump(-1));plus.addEventListener('click',bump(1));rangeControls.push(sync);sync();
+ }
+
 // A camera rejection or startup failure returns to home and preserves its diagnostic.
 function tick(){
+ for(const sync of rangeControls)sync();
  if(!active)return;
  const p=$('scanToggleV4'),q=$('quickPause073'),n=$('quickNext073');q.disabled=p.disabled;n.disabled=$('next').disabled;
  const diag=$('captureDiag0731'),capture=globalThis.RiftCapture0731;if(diag){let text=capture&&$('bestFrameEnabled')?.checked?`${capture.detail} · ${capture.submitted} OCR / ${capture.skipped} skipped`:$('status').textContent; const focusMessage=$('focusStatus')?.textContent.trim()||'';
    const now=performance.now();
    if(focusMessage!==focusLast){focusLast=focusMessage;focusUntil=now+8000;}
    if(typeof adjusting!=='undefined'&&adjusting&&/^Focusing/.test($('autofocus').textContent))focusUntil=now+8000;
-   if(focusMessage&&(now<focusUntil||/does not expose autofocus control/i.test(focusMessage)))text='Focus: '+focusMessage+' · '+text;
+   if(focusMessage&&(now<focusUntil||/autofocus control not exposed|does not expose autofocus control/i.test(focusMessage)))text='Focus: '+focusMessage;
+   diag.title=text;
    if(diag.textContent!==text)diag.textContent=text;}
  q.textContent=typeof paused!=='undefined'&&paused?'Resume':'Pause';
  toggle.textContent=settings.hidden?'Settings':'Close';
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.2 · focus diagnostics';
+$('versionTag').textContent='V0.7.3.2 · focus & touch controls';
 })();
