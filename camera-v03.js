@@ -19,12 +19,17 @@
     const track = trackNow();
     const modes = supportedModes(track);
     const available = modes.includes('single-shot') || modes.includes('continuous');
-    button.disabled = !track || !available || focusing || adjusting;
+    button.disabled = !track || track.readyState==='ended' || focusing || adjusting || $('applyCamera').disabled;
+    if(!focusing){
+      const text=track&&!available?'Reset focus':'Focus';
+      if(button.textContent!==text)button.textContent=text;
+      button.title=available?'Request autofocus':'Reopen camera without a manual focus setting';
+    }
     if (track !== observedTrack) {
       observedTrack = track;
       message.textContent = (track&&cameraFocusReports.get(track)) || (!track ? 'Start the camera to check autofocus support.' : available
         ? 'Autofocus available. Hold the card steady and tap Auto focus.'
-        : 'This camera/browser does not expose autofocus control. Try another rear camera or browser.');
+        : focusDescription(capabilities(track),track.getSettings?.().focusMode));
     }
   }
 
@@ -64,7 +69,12 @@
   button.addEventListener('click', async () => {
     const track = trackNow();
     const modes = supportedModes(track);
-    if (!track || adjusting || focusing || !modes.some(m => m === 'single-shot' || m === 'continuous')) return;
+    if (!track || track.readyState==='ended' || adjusting || focusing || $('applyCamera').disabled) return;
+    if(!modes.some(m=>m==='single-shot'||m==='continuous')){
+      message.textContent='Resetting camera focus. If manual remains the only mode, try another rear camera.';
+      $('applyCamera').click();
+      return;
+    }
     focusing = true;
     adjusting = true;
     invalidate(); // discard in-flight OCR, keep the existing duplicate-card lock
@@ -105,7 +115,7 @@
         if (track === trackNow()) { adjusting = false; cameraFocusReports.set(track,message.textContent); }
       }
       focusing = false;
-      button.textContent = 'Auto focus';
+      button.textContent = 'Focus';
       sync();
     }
   });
