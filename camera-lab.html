@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RiftScan Camera Lab</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui;background:#111822;color:#edf2f8}body{margin:12px auto;padding:0 12px;max-width:720px}h1{font-size:1.5rem}p{line-height:1.4}label{display:block;margin:10px 0}select,button{font:inherit;padding:10px;min-height:44px;color:inherit;background:#273344;border:1px solid #556477;border-radius:8px}select{width:100%;box-sizing:border-box}button{margin:4px 4px 4px 0}video{display:block;width:100%;max-height:55dvh;object-fit:contain;background:#000;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#202a39;padding:12px;border-radius:8px;font-size:13px}button:disabled{opacity:.5}
+</style></head><body><h1>RiftScan Camera Lab</h1><p>Camera preview only. No OCR, card tracking, saved collections, or fullscreen scanner code. All images stay in this browser.</p>
+<label>Camera<select id="device"><option value="">Automatic rear camera</option></select></label>
+<label>Requested resolution<select id="res"><option value="">Browser default</option><option value="1280">720p</option><option value="1920">1080p</option><option value="2560">1440p</option><option value="3840">4K</option></select></label>
+<button id="start">Start / reopen</button><button id="stop">Stop</button>
+<video id="preview" autoplay muted playsinline></video>
+<p>First test the default camera without pressing a focus button. Move the card farther away, then gradually closer. Then try the old V0.6 focus request below.</p>
+<button id="legacy" disabled>Try V0.6 focus request</button><button id="refresh" disabled>Refresh diagnostics</button>
+<pre id="report" role="status">Camera off.</pre>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+let stream=null,serial=0,working=false,last='Camera off.';
+const video=el('preview');
+function controls(){el('start').disabled=working;el('legacy').disabled=working||!stream;el('refresh').disabled=!stream;}
+function current(){return stream?.getVideoTracks()[0];}
+function closeCamera(){serial++;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;working=false;last='Camera off.';report();controls();}
+function report(){
+ const t=current();if(!t){el('report').textContent=last;return;}
+ const s=t.getSettings?.()||{};let c={};try{c=t.getCapabilities?.()||{};}catch(_){}
+ el('report').textContent=[last,'Camera: '+(t.label||'not reported'),'Facing: '+(s.facingMode||'not reported'),'Video: '+(video.videoWidth||'?')+' × '+(video.videoHeight||'?'),'FPS: '+(s.frameRate??'not reported'),'Active focus: '+(s.focusMode||'not reported'),'Available focus: '+(Array.isArray(c.focusMode)?c.focusMode.join(', '):'not reported'),'Focus distance: '+(s.focusDistance??'not reported')].join('\n');
+}
+async function devices(){
+ const old=el('device').value;const items=await navigator.mediaDevices.enumerateDevices();el('device').replaceChildren(new Option('Automatic rear camera',''),...items.filter(d=>d.kind==='videoinput').map((d,i)=>new Option(d.label||'Camera '+(i+1),d.deviceId)));
+ if([...el('device').options].some(o=>o.value===old))el('device').value=old;
+}
+async function start(){
+ closeCamera();const id=serial;working=true;controls();last='Opening camera without focus constraints…';report();
+ const deviceId=el('device').value,w=Number(el('res').value);
+ const constraints={...(deviceId?{deviceId:{exact:deviceId}}:{facingMode:{ideal:'environment'}}),...(w?{width:{ideal:w},height:{ideal:Math.round(w*9/16)},frameRate:{ideal:30}}:{})};
+ try{
+  const next=await navigator.mediaDevices.getUserMedia({audio:false,video:constraints});
+  if(id!==serial){next.getTracks().forEach(t=>t.stop());return;}
+  stream=next;video.srcObject=next;await video.play();if(id!==serial)return;
+  try{await devices();}catch(_){}
+  if(id!==serial)return;
+  last='Default camera behavior: no focus-mode request applied.';report();
+ }catch(e){if(id===serial){stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;last='Camera error: '+e.name+' — '+e.message;report();}}
+ finally{if(id===serial){working=false;controls();}}
+}
+async function legacy(){
+ const t=current(),id=serial;if(!t||working)return;working=true;controls();
+ try{
+  const caps=t.getCapabilities?.()||{};
+  if(!caps.focusMode?.includes('continuous')){last='V0.6 would skip autofocus: continuous is not listed.';}
+  else{await t.applyConstraints({advanced:[{focusMode:'continuous'}]});if(id!==serial)return;last='V0.6 continuous request returned. Check visual sharpness.';}
+ }catch(e){if(id===serial)last='V0.6 request rejected: '+e.name+' — '+e.message;}
+ finally{if(id===serial){working=false;controls();report();}}
+}
+el('start').onclick=start;el('stop').onclick=closeCamera;el('legacy').onclick=legacy;el('refresh').onclick=report;
+video.addEventListener('resize',report);window.addEventListener('pagehide',closeCamera);controls();
+</script></body></html>
