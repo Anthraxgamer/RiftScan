@@ -72,11 +72,20 @@ $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeS
  }
 
 // A camera rejection or startup failure returns to home and preserves its diagnostic.
+$('auditSettings0738').addEventListener('click',()=>{
+  if(!settings.hidden)pauseIfRunning();
+  for(const [id,value] of [['threshold','50'],['reads','2']]){
+    const e=$(id);e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+  if(typeof invalidate==='function')invalidate();
+  $('auditResult0738').textContent='Test settings applied: 50% confidence, 2 matching reads. Resume scanning.';
+});
+$('bestFrameEnabled').addEventListener('change',()=>{if(typeof invalidate==='function')invalidate();});
 function tick(){
  for(const sync of rangeControls)sync();
  if(!active)return;
  const p=$('scanToggleV4'),q=$('quickPause073'),n=$('quickNext073');q.disabled=p.disabled;n.disabled=$('next').disabled;const retry=$('bestFrameEnabled')?.checked&&globalThis.RiftCapture0731?.phase==='retry';if(n.textContent!==(retry?'Retry capture':'Next card'))n.textContent=retry?'Retry capture':'Next card';
- const diag=$('captureDiag0731'),capture=globalThis.RiftCapture0731;if(diag){let text=capture&&$('bestFrameEnabled')?.checked?`${capture.detail} · ${capture.submitted} OCR / ${capture.skipped} skipped`:$('status').textContent; const focusMessage=$('focusStatus')?.textContent.trim()||'';
+ const diag=$('captureDiag0731');if(diag){const legacy=$('bestFrameEnabled')?.checked;let text=(legacy?'V0.6 best-frame':'Direct OCR')+' · '+(legacy?$('bestFrameV055').textContent:$('ocrState').textContent); const focusMessage=$('focusStatus')?.textContent.trim()||'';
    const now=performance.now();
    if(focusMessage!==focusLast){focusLast=focusMessage;focusUntil=now+8000;}
    if(typeof adjusting!=='undefined'&&adjusting&&/^Focusing/.test($('autofocus').textContent))focusUntil=now+8000;
@@ -88,5 +97,5 @@ function tick(){
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.7 · frozen capture';
+$('versionTag').textContent='V0.7.3.8 · recovery baseline';
 })();
