@@ -19,16 +19,17 @@
     @media(max-width:599px){main{padding:12px 8px 32px}section{padding:9px}.cameraWorkspace{gap:6px;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}#cameraPanel{padding:7px;gap:8px}#cameraPanel h2{font-size:14px}#cameraPanel label,#cameraPanel .mono,#cameraPanel .foot{font-size:11px}#cameraPanel button,#cameraPanel select{font-size:12px;padding:7px 5px}#cameraPanel .row{display:grid;grid-template-columns:minmax(0,1fr);gap:5px}.target span{font-size:7px;padding:1px 2px}.cameraQuick button{font-size:13px;padding:8px 5px}.empty{font-size:12px}}
     @media(orientation:landscape) and (max-height:550px){.cameraWorkspace{--camera-height:clamp(155px,58dvh,300px)}}
    .ocrPanel{border:1px solid #40516a;border-radius:10px;padding:9px;margin-bottom:10px;overflow-wrap:anywhere}.ocrPanel canvas{max-height:125px;object-fit:contain;margin-top:5px}.ocrPanel .foot{margin-top:4px}.guide[data-scan="reading"]{border-color:#438cf5}.guide[data-scan="uncertain"]{border-color:#f6d58a}.guide[data-scan="saved"]{border-color:#75e1bf}.guide[data-scan="idle"]{border-color:#a4b0c0}
+    .perfGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.perfGrid>div{background:#101620;border-radius:8px;padding:8px;min-width:0}.perfGrid strong{display:block;font-size:20px;overflow-wrap:anywhere}.lastScan{border:1px solid #40516a;border-radius:10px;padding:10px;margin:10px 0;overflow-wrap:anywhere}.lastScan[data-saved="true"]{border-color:#75e1bf}.lastScan b{font-size:18px;color:#9be9d2}.perfMethods{white-space:pre-line;overflow-wrap:anywhere}
   </style>
   <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
   <script defer src="core.js"></script>
-  <script defer src="app.js"></script>
+  <script defer src="app.js?v=05"></script>
   <script defer src="camera-v03.js?v=03"></script>
-  <script defer src="recognition-v04.js?v=04"></script>
+  <script defer src="recognition-v05.js?v=05"></script>
 </head>
 <body>
 <main>
-  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.4 · recognition lab</span></header>
+  <header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.5 · performance lab</span></header>
   <div class="layout">
     <div>
       <section id="scannerSection">
@@ -61,9 +62,16 @@
         <div class="row cameraQuick"><button id="applyCamera">Apply / restart camera</button><button id="scanToggleV4" disabled>Pause scanning</button></div>
         <p class="focusStatus" id="focusStatus" role="status">Start the camera to check autofocus support.</p>
         <div class="status" id="status" role="status">Camera off.</div>
+        <div class="lastScan" id="lastScan"><small>Last automatic save</small><br><b id="lastScanCode">No cards scanned yet</b><p class="foot" id="lastScanInfo">Your saved card will stay visible here while you scan the next one.</p></div>
         <div id="liveOCR" class="ocrPanel"><div class="row spread"><b id="ocrState">Scanner off</b><span class="mono" id="ocrCount">0 attempts</span></div><p class="mono" id="debug">No readings yet.</p><canvas id="cropPreview"></canvas><p class="foot" id="ocrMethods">Waiting for camera.</p><p class="foot">Image shown is the OCR input. Foil score is experimental, not a probability.</p></div>
         <div class="row"><button class="primary grow" id="start">Start camera</button><button id="stop" disabled>Stop</button><button id="torch" disabled>Light</button></div>
         <div class="row" style="margin-top:10px"><button id="next" class="grow" disabled>Ready for next card</button><label><input type="checkbox" id="sound" checked style="width:auto"> Sound</label></div>
+        <details id="performancePanel"><summary>Session performance</summary>
+          <p id="engineState" class="foot" role="status">OCR engine waiting</p>
+          <div class="perfGrid"><div><small>Automatic saves</small><strong id="perfSaved">0</strong></div><div><small>Avg confirmation</small><strong id="perfConfirm">—</strong></div><div><small>Avg OCR cycle</small><strong id="perfCycle">—</strong></div><div><small>Valid OCR cycles</small><strong id="perfValid">0 / 0</strong></div></div>
+          <p class="foot" id="perfLast">Last confirmation: —</p><p class="foot" id="perfPreferred">Preferred method: Original · line</p><p class="mono perfMethods" id="perfMethods"></p>
+          <p class="foot">Session stats reset when the page reloads. Confirmation time starts at the first cycle in a successful reading streak, not at physical card placement. Valid cycles are not measured card accuracy. Method counts include still scans and repeated readings; automatic saves exclude manual and still-photo adds.</p>
+        </details>
         <p class="foot">Keep the card upright and fill the outline. Remove it fully before showing an identical copy. Use Ready for next card only after physically replacing it.</p>
       </section>
       <section class="stack">
