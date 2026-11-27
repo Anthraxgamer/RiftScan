@@ -106,7 +106,8 @@ async function storePending(){
   pendingStore=null;held=true;empty=stable=0;presentSince=0;storageError='';
   $('receipt').textContent='IMAGE CAPTURED ✓ · '+job.id.slice(0,8)+' · Replace card';
   try{navigator.vibrate?.(70);}catch(_){}
-  await refresh();state('Capture stored. You can replace the card now.');void pump();
+  state('Capture stored. You can replace the card now.');
+  try{await refresh();void pump();}catch(e){storageError=e.message;state('Capture is stored, but the queue view failed. Reload to recover: '+e.message);}
  }catch(e){storageError=e.message;state('Storage error: '+e.message+' · Capture not confirmed; retry storage before leaving.');}
  finally{storing=false;controls();}
 }
