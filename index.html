@@ -48,8 +48,8 @@
 </style>
 <script defer="" src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js"></script>
 <script defer="" src="core.js"></script>
-<script defer="" src="app.js?v=0732"></script>
-<script defer="" src="camera-v03.js?v=0732"></script>
+<script defer="" src="app.js?v=0733"></script>
+<script defer="" src="camera-v03.js?v=0733"></script>
 <script defer="" src="recognition-v05.js?v=0732"></script>
 <script defer="" src="best-frame-v055.js?v=0731"></script>
 <script defer="" src="mobile-v06.js?v=0731"></script>
@@ -69,7 +69,7 @@ body.immersiveActive073{overflow:hidden;overscroll-behavior:none}
 .immersive073 #scanBottom073.expanded073{height:min(62dvh,480px);z-index:6}.immersive073 #scanBottom073.expanded073 #collectionPanel{background:#101620f2}
 @media(orientation:landscape) and (min-width:600px){.immersive073 #scanBottom073{left:auto;width:clamp(230px,28vw,350px);height:clamp(170px,65dvh,300px)}.immersive073 #view[data-calibrating=true]~#cameraPanel{left:auto;width:clamp(230px,28vw,350px);height:clamp(170px,65dvh,300px)}.immersive073 #scanBottom073.expanded073{height:min(75dvh,480px)}}
 #captureDiag0731{position:absolute;top:100%;left:0;right:0;text-align:center;font-size:10px;line-height:1.2;color:#fff;background:#101620b8;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;pointer-events:none}
-</style><script defer="" src="immersive-v073.js?v=0732b"></script><style>
+</style><script defer="" src="immersive-v073.js?v=0733"></script><style>
 /* V0.7.3.2: deliberate touch controls. Original range fields remain for script compatibility. */
 .stepper0732{display:grid;grid-template-columns:minmax(44px,1fr) minmax(54px,1.3fr) minmax(44px,1fr);gap:8px;align-items:center;margin:6px 0 12px;touch-action:pan-y}
 .stepper0732 button{min-height:44px!important;min-width:44px;font-size:20px!important;line-height:1;padding:8px!important;touch-action:pan-y;user-select:none}
@@ -79,7 +79,7 @@ input[type=range][hidden]{display:none!important}
 </style></head>
 <body>
 <main>
-<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7.3.2 · loading</span></header>
+<header><div><h1>RiftScan<span style="color:#8ce5c8">.</span></h1><small>Live Riftbound collection scanner</small></div><span class="tag" id="versionTag">V0.7.3.3 · loading</span></header>
 <div class="layout">
 <div>
 <section id="scannerSection"><div id="homeLaunch073"><h2>Ready to scan?</h2><p>Open the fullscreen camera. Your collection stays on this device.</p><button class="primary grow" id="start">Start scan</button></div>
@@ -100,7 +100,7 @@ input[type=range][hidden]{display:none!important}
 <label>Requested frame rate<select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select></label>
 <div class="row"><button id="resetCamera">Reset defaults</button></div>
 <label hidden="" id="zoomRow">Camera zoom <output id="zoomValue"></output><input id="zoom" type="range"/></label>
-<label hidden="" id="focusRow">Focus mode<select id="focusMode"></select></label>
+<label hidden="" id="focusRow">Focus mode<select id="focusMode"></select><small id="focusCapabilities0733">Start camera to inspect available focus modes.</small></label>
 <label hidden="" id="distanceRow">Manual focus distance <output id="distanceValue"></output><input id="focusDistance" type="range"/></label>
 <details id="zoneSettingsV071"><summary>Zone calibration</summary><p class="foot">Scanning pauses while editing. Show one card only. Move it farther away until all four corners are visible, then fit the outer outline to the card. Gold = actual OCR crop; keep the entire printed ID inside it. Green dashed = artwork only.</p><h3>Outer card outline</h3><label>Card outline size <output id="out-guideWidth">94%</output><input id="zone-guideWidth" max="99" min="40" type="range" value="94"/></label><label>Card horizontal position <output id="out-guideX">50%</output><input id="zone-guideX" max="100" min="0" type="range" value="50"/></label><label>Card vertical position <output id="out-guideY">50%</output><input id="zone-guideY" max="100" min="0" type="range" value="50"/></label><h3>Collector ID region</h3><label>ID horizontal position <output id="out-idLeft">5%</output><input id="zone-idLeft" max="85" min="0" type="range" value="5"/></label><label>ID width <output id="out-idWidth">58%</output><input id="zone-idWidth" max="95" min="15" type="range" value="58"/></label><label>ID height <output id="out-idHeight">9%</output><input id="zone-idHeight" max="30" min="5" type="range" value="9"/></label><label>Collector box vertical position<input id="targetOffset" max="18" min="0" type="range" value="3"/></label><h3>Artwork / foil region</h3><label>Artwork horizontal position <output id="out-artLeft">12%</output><input id="zone-artLeft" max="85" min="0" type="range" value="12"/></label><label>Artwork vertical position <output id="out-artTop">8%</output><input id="zone-artTop" max="85" min="0" type="range" value="8"/></label><label>Artwork width <output id="out-artWidth">76%</output><input id="zone-artWidth" max="100" min="15" type="range" value="76"/></label><label>Artwork height <output id="out-artHeight">31%</output><input id="zone-artHeight" max="85" min="15" type="range" value="31"/></label><button id="resetZonesV071" type="button">Reset zone defaults</button><p id="zoneNoteV071" role="status">Settings stay on this device.</p><button id="doneZonesV071" type="button">Done · show collection</button></details>
 <div class="row"><button disabled="" id="pauseScan">Pause scanning</button><button disabled="" id="photoScan">Capture &amp; scan photo</button></div>
