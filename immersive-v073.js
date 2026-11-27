@@ -88,5 +88,5 @@ function tick(){
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.4 · autofocus only';
+$('versionTag').textContent='V0.7.3.6 · first-card recovery';
 })();
