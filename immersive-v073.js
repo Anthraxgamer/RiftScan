@@ -54,7 +54,7 @@ $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeS
      const display=String(Number(n.toPrecision(8)));
      if(value.textContent!==display)value.textContent=display;
      const unavailable=range.disabled||!Number.isFinite(n)||hi<=lo||
-       (['zoom','focusDistance'].includes(range.id)&&(!trackNow()||adjusting));
+       (range.id==='zoom'&&(!trackNow()||adjusting));
      minus.disabled=unavailable||n<=lo;plus.disabled=unavailable||n>=hi;
    };
    const bump=direction=>e=>{
@@ -80,7 +80,7 @@ function tick(){
    const now=performance.now();
    if(focusMessage!==focusLast){focusLast=focusMessage;focusUntil=now+8000;}
    if(typeof adjusting!=='undefined'&&adjusting&&/^Focusing/.test($('autofocus').textContent))focusUntil=now+8000;
-   if(focusMessage&&(now<focusUntil||/autofocus control not exposed|does not expose autofocus control|No autofocus mode exposed/i.test(focusMessage)))text='Focus: '+focusMessage;
+   if(focusMessage&&now<focusUntil)text='Focus: '+focusMessage;
    diag.title=text;
    if(diag.textContent!==text)diag.textContent=text;}
  q.textContent=typeof paused!=='undefined'&&paused?'Resume':'Pause';
@@ -88,5 +88,5 @@ function tick(){
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.3 · focus recovery';
+$('versionTag').textContent='V0.7.3.4 · autofocus only';
 })();
