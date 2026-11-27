@@ -3,6 +3,8 @@
 const $=id=>document.getElementById(id), sec=$('scannerSection'),start=$('start'),stop=$('stop'),settings=$('cameraPanel'),toggle=$('toggleCameraPanel'),bottom=$('scanBottom073'),home=$('homeLaunch073');
 if(!sec||!start||!stop||!settings||!toggle||!bottom||!home)return;
 let active=false,native=false,serial=0,closing=false;
+let focusLast='',focusUntil=0;
+$('autofocus').addEventListener('click',()=>{focusUntil=performance.now()+10000;},true);
 const notice=document.createElement('p');notice.id='homeNotice073';notice.setAttribute('role','status');home.append(notice);
 const refresh=()=>{window.RiftZonesV071?.refresh?.();};
 function pauseIfRunning(){if(typeof stream!=='undefined'&&stream&&typeof paused!=='undefined'&&!paused&&!$('pauseScan').disabled)$('pauseScan').click();}
@@ -33,11 +35,16 @@ $('quickCollection073').addEventListener('click',()=>{if(!settings.hidden)closeS
 function tick(){
  if(!active)return;
  const p=$('scanToggleV4'),q=$('quickPause073'),n=$('quickNext073');q.disabled=p.disabled;n.disabled=$('next').disabled;
- const diag=$('captureDiag0731'),capture=globalThis.RiftCapture0731;if(diag){const text=capture&&$('bestFrameEnabled')?.checked?`${capture.detail} · ${capture.submitted} OCR / ${capture.skipped} skipped`:$('status').textContent; if(diag.textContent!==text)diag.textContent=text;}
+ const diag=$('captureDiag0731'),capture=globalThis.RiftCapture0731;if(diag){let text=capture&&$('bestFrameEnabled')?.checked?`${capture.detail} · ${capture.submitted} OCR / ${capture.skipped} skipped`:$('status').textContent; const focusMessage=$('focusStatus')?.textContent.trim()||'';
+   const now=performance.now();
+   if(focusMessage!==focusLast){focusLast=focusMessage;focusUntil=now+8000;}
+   if(typeof adjusting!=='undefined'&&adjusting&&/^Focusing/.test($('autofocus').textContent))focusUntil=now+8000;
+   if(focusMessage&&(now<focusUntil||/does not expose autofocus control/i.test(focusMessage)))text='Focus: '+focusMessage+' · '+text;
+   if(diag.textContent!==text)diag.textContent=text;}
  q.textContent=typeof paused!=='undefined'&&paused?'Resume':'Pause';
  toggle.textContent=settings.hidden?'Settings':'Close';
  if(typeof stream!=='undefined'&&typeof busy!=='undefined'&&!stream&&!busy&&!start.disabled){const msg=$('status').textContent;if(/^Could not start|^Camera off|^Scan error/i.test(msg))leave(msg==='Camera off.'?'':msg);}
 }
 setInterval(tick,120);window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
-$('versionTag').textContent='V0.7.3.1 · capture fix';
+$('versionTag').textContent='V0.7.3.2 · focus diagnostics';
 })();
