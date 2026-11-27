@@ -64,7 +64,7 @@
   const analysis=canvas(240,64),actx=analysis.getContext('2d',{willReadFrequently:true});
   const target=document.getElementById('target'), panel=document.getElementById('ocrMethods')||document.getElementById('debug');
   if(!target||!panel)return;
-  const info=existingInfo||document.createElement('p');info.className='foot';info.id='bestFrameV055';info.textContent='Best-frame experiment: ready';
+  const info=existingInfo||document.createElement('p');info.className='foot';info.id='bestFrameV055';info.textContent='Direct OCR active. V0.6 best-frame mode is optional.';
   const enabled=existingToggle||document.createElement('input');enabled.type='checkbox';enabled.checked=false;enabled.disabled=false;enabled.style.width='auto';
   if(!existingToggle){const toggle=document.createElement('label');toggle.className='foot';toggle.append(enabled,document.createTextNode(' Best of 4 frames (V0.5.5)'));panel.before(toggle,info);}
   let batches=0,captures=0,submitted=0,skipped=0,generation=0;
