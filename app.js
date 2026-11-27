@@ -22,9 +22,9 @@ if(!valid){candidate=null;if(locked){ // blank/low texture background twice, not
 if(f&&f.variance<100){absent++;if(absent>=2){reset();status('Ready for next card');}}else absent=0;}else status('Align the collector number; hold steady.');}
 else{absent=0;if(k===locked){candidate=null;status('Saved '+k+' — remove card or show next.');}else{if(candidate?.k===k)candidate.n++;else{candidate={k,n:1,startedAt:start};if(locked)history=f?[f]:[];}let needed=Number($('reads').value);if(candidate.n>=needed){let mode=$('mode').value,finish=mode==='auto'?'review':mode;let score=foilMetric(history),hint=mode==='auto'?(score>=7?'Possible foil · confirm finish':'Finish uncertain · confirm normal or foil'):'';add(p.set,p.num,finish,hint);window.RiftScanPerf?.saved(p,finish,confidence,performance.now()-candidate.startedAt,items.filter(c=>c.set===p.set&&c.num===p.num).length);locked=k;candidate=null;history=[];$('guide').classList.add('locked');status('Saved '+k+(finish==='review'?' · finish needs review':' · '+finish));beep();}else status('Checking '+k+' ('+candidate.n+'/'+needed+')');}}
 }catch(e){if(id===run){status('Scan error: '+e.message);await delay(1100);}}await delay(100);}}
-async function start(){if(busy||stream)return;busy=true;$('start').disabled=true;$('stop').disabled=false;let id=++run;try{if(!navigator.mediaDevices?.getUserMedia)throw new Error('Open the site using HTTPS or localhost in a normal browser.');try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();await audio.resume();}catch(e){}let s=await openCamera();if(id!==run){s.getTracks().forEach(t=>t.stop());return;}stream=s;video.srcObject=s;await video.play();if(id!==run)return;$('empty').hidden=true;$('next').disabled=false;let track=s.getVideoTracks()[0],caps=track.getCapabilities?.()||{};$('torch').disabled=!caps.torch;if(caps.focusMode?.includes('continuous'))try{await track.applyConstraints({advanced:[{focusMode:'continuous'}]});}catch(e){}status('Loading text recognition…');await refreshCamera();await getWorker();if(id!==run)return;reset();status('Align the card and hold steady.');await loop(id);}catch(e){if(id===run){stop();status('Could not start: '+e.message);}}finally{busy=false;if(!stream)$('start').disabled=false;}}
+async function start(){if(busy||stream)return;busy=true;$('start').disabled=true;$('stop').disabled=false;let id=++run;try{if(!navigator.mediaDevices?.getUserMedia)throw new Error('Open the site using HTTPS or localhost in a normal browser.');try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();await audio.resume();}catch(e){}let s=await openCamera();if(id!==run){s.getTracks().forEach(t=>t.stop());return;}stream=s;video.srcObject=s;await video.play();if(id!==run)return;$('empty').hidden=true;$('next').disabled=false;let track=s.getVideoTracks()[0],caps=track.getCapabilities?.()||{};$('torch').disabled=!caps.torch;adjusting=true;try{await initializeCameraFocus(track);}finally{if(id===run&&track===trackNow())adjusting=false;}if(id!==run||track!==trackNow())return;status('Loading text recognition…');await refreshCamera();await getWorker();if(id!==run)return;reset();status('Align the card and hold steady.');await loop(id);}catch(e){if(id===run){stop();status('Could not start: '+e.message);}}finally{busy=false;if(!stream)$('start').disabled=false;}}
 function stop(){run++;cameraEpoch++;paused=false;adjusting=false;$('pauseScan').textContent='Pause scanning';$('pauseScan').disabled=$('photoScan').disabled=true;$('cameraInfo').textContent='Camera off.';for(const k of ['zoomRow','focusRow','distanceRow'])$(k).hidden=true;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torchOn=false;$('torch').textContent='Light';$('torch').disabled=$('stop').disabled=$('next').disabled=true;$('start').disabled=busy;$('empty').hidden=false;reset();status('Camera off.');}
-$('start').onclick=start;$('stop').onclick=stop;$('next').onclick=()=>{reset();status('Ready — align a different physical card.');};$('torch').onclick=async()=>{let t=stream?.getVideoTracks()[0];if(t)try{await t.applyConstraints({advanced:[{torch:!torchOn}]});torchOn=!torchOn;$('torch').textContent=torchOn?'Light off':'Light';}catch(e){status('Torch unavailable: '+e.message);}};
+$('start').onclick=start;$('stop').onclick=stop;$('next').onclick=()=>{reset();status('Ready — align a different physical card.');};$('torch').onclick=async()=>{const t=trackNow();if(!t||adjusting)return;adjusting=true;invalidate();try{await t.applyConstraints(mergedCameraConstraints(t,{torch:!torchOn}));if(t!==trackNow())return;torchOn=t.getSettings?.().torch??!torchOn;$('torch').textContent=torchOn?'Light off':'Light';}catch(e){if(t===trackNow())status('Torch unavailable: '+e.message);}finally{if(t===trackNow())adjusting=false;}};
 $('undo').onclick=()=>{items.pop();render();};$('clear').onclick=()=>{if(items.length&&confirm('Clear your entire local scanning session?')){items=[];render();}};
 $('manualAdd').onclick=()=>{let set=$('manualSet').value.trim().toUpperCase(),num=$('manualNumber').value.trim().toLowerCase();if(!C.validate(set,num)){status('Enter a 3-letter set and 3–4 digit card number, optional letter.');return;}add(set,num,$('manualFinish').value);$('manualNumber').value='';};
 $('copy').onclick=async()=>{let s=C.exportText(items);if(!s)return;try{await navigator.clipboard.writeText(s);status('Collection copied.');}catch(e){$('output').focus();$('output').select();status('Select and copy the text manually.');}};
@@ -41,20 +41,70 @@ function setPreset(){const p=$('profile').value;if(p==='custom')return;$('resolu
 function cameraRequest(useDevice=true){const width=Number($('resolution').value)||2560;const height=width===640?480:Math.round(width*9/16);return {audio:false,video:{...(useDevice&&desiredSource?{deviceId:{exact:desiredSource}}:{facingMode:{ideal:'environment'}}),width:{ideal:width},height:{ideal:height},frameRate:{ideal:Number($('fps').value)||30}}};}
 async function openCamera(){try{const result=await navigator.mediaDevices.getUserMedia(cameraRequest());openedSource=desiredSource;return result;}catch(e){if(!['OverconstrainedError','NotFoundError'].includes(e.name))throw e;camMessage('Requested camera unavailable; using automatic fallback.');openedSource='';return navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'}}});}}
 function trackNow(){return stream?.getVideoTracks()[0];}
+
+function mergedCameraConstraints(track, values={}) {
+  const previous=track.getConstraints?.()||{}, actual=track.getSettings?.()||{}, caps=capabilities(track);
+  const next={...previous}, touched=new Set(Object.keys(values));
+  if(touched.has('focusMode')&&values.focusMode!=='manual')touched.add('focusDistance');
+  const advanced=(previous.advanced||[]).map(entry=>{
+    const copy={...entry};for(const key of touched)delete copy[key];return copy;
+  }).filter(entry=>Object.keys(entry).length);
+  for(const key of touched)delete next[key];
+  const has=key=>next[key]!=null||advanced.some(a=>key in a);
+  for(const key of ['width','height','frameRate'])if(!touched.has(key)&&!has(key)&&Number.isFinite(actual[key]))next[key]={ideal:actual[key]};
+  for(const key of ['zoom','torch','focusMode','focusDistance']){
+    if(touched.has(key)||has(key)||caps[key]==null||actual[key]==null)continue;
+    if(key==='focusDistance'&&actual.focusMode!=='manual')continue;
+    advanced.push({[key]:actual[key]});
+  }
+  const controls={};
+  for(const [key,value] of Object.entries(values)){
+    if(['width','height','frameRate','deviceId','facingMode','aspectRatio'].includes(key))next[key]=value;
+    else controls[key]=value;
+  }
+  if(Object.keys(controls).length)advanced.push(controls);
+  if(advanced.length)next.advanced=advanced;else delete next.advanced;
+  return next;
+}
+const cameraFocusReports=new WeakMap();
+async function initializeCameraFocus(track){
+  const caps=capabilities(track), modes=Array.isArray(caps.focusMode)?caps.focusMode:[];
+  const mode=modes.includes('continuous')?'continuous':modes.includes('single-shot')?'single-shot':null;
+  let report='Autofocus control not exposed. Check sharpness or try another camera.';
+  if(mode){
+    try{
+      let firstError;
+      try{await track.applyConstraints(mergedCameraConstraints(track,{focusMode:mode}));}catch(e){firstError=e;}
+      if(track!==trackNow())return;
+      if(firstError||track.getSettings?.().focusMode!==mode){
+        const exact=mergedCameraConstraints(track,{focusMode:mode});
+        exact.advanced=(exact.advanced||[]).map(entry=>{const copy={...entry};delete copy.focusMode;return copy;}).filter(entry=>Object.keys(entry).length);
+        if(!exact.advanced.length)delete exact.advanced;
+        exact.focusMode={exact:mode};
+        try{await track.applyConstraints(exact);}catch(e){if(firstError)throw e;}
+      }
+      const actual=track.getSettings?.().focusMode;
+      report=actual===mode?'Camera focus mode: '+mode+'. Check sharpness.':'Focus requested; mode not confirmed.';
+    }catch(e){report='Initial autofocus failed: '+e.message;}
+  }
+  cameraFocusReports.set(track,report);
+  if(track===trackNow())$('focusStatus').textContent=report;
+}
+
 function capabilities(t){try{return t?.getCapabilities?.()||{};}catch(e){return {};}}
 function diagnostics(){const t=trackNow();if(!t)return;const s=t.getSettings?.()||{}; $('cameraInfo').textContent=`Actual video: ${video.videoWidth||s.width||'?'} × ${video.videoHeight||s.height||'?'} | ${s.frameRate?Math.round(s.frameRate)+' FPS':'FPS unknown'} | ${s.focusMode||'focus mode unavailable'}${s.zoom!=null?' | zoom '+s.zoom+'×':''} | ${t.label||'Camera'}`;}
 function rangeControl(row,id,valueId,cap,value){const ok=cap&&Number.isFinite(cap.min)&&Number.isFinite(cap.max)&&cap.max>cap.min;$(row).hidden=!ok;if(!ok)return;const el=$(id);el.min=cap.min;el.max=cap.max;el.step=cap.step>0?cap.step:'any';el.value=Number.isFinite(value)?value:cap.min;$(valueId).textContent=el.value;}
 async function refreshCamera(){const t=trackNow();if(!t)return;const caps=capabilities(t),s=t.getSettings?.()||{};try{const devices=await navigator.mediaDevices.enumerateDevices();if(t!==trackNow())return;const sel=$('cameraSource');sel.replaceChildren(new Option('Automatic rear camera',''));let n=0;for(const d of devices.filter(d=>d.kind==='videoinput'))sel.add(new Option(d.label||`Camera ${++n}`,d.deviceId));if([...sel.options].some(o=>o.value===desiredSource))sel.value=desiredSource;else sel.value='';}catch(e){}
 if(t!==trackNow())return;rangeControl('zoomRow','zoom','zoomValue',caps.zoom,s.zoom);const modes=Array.isArray(caps.focusMode)?caps.focusMode:[];$('focusRow').hidden=!modes.length;$('focusMode').replaceChildren(...modes.map(m=>new Option(m,m)));if(modes.includes(s.focusMode))$('focusMode').value=s.focusMode;rangeControl('distanceRow','focusDistance','distanceValue',caps.focusDistance,s.focusDistance);if(s.focusMode!=='manual')$('distanceRow').hidden=true;$('pauseScan').disabled=false;$('photoScan').disabled=false;diagnostics();}
 function invalidate(){cameraEpoch++;candidate=null;history=[];absent=0;}
-async function changeTrack(values){const t=trackNow();if(!t||adjusting)return;adjusting=true;invalidate();try{await t.applyConstraints({advanced:[values]});if(t!==trackNow())return;const s=t.getSettings?.()||{};const mismatch=Object.entries(values).some(([k,v])=>s[k]!=null&&(typeof v==='number'?Math.abs(s[k]-v)>.01:s[k]!==v));camMessage(mismatch?'Browser did not apply the exact requested setting.':'Camera setting requested.');}catch(e){camMessage('Setting unavailable: '+e.message);}finally{adjusting=false;await refreshCamera();}}
+async function changeTrack(values){const t=trackNow();if(!t||adjusting)return;adjusting=true;invalidate();try{await t.applyConstraints(mergedCameraConstraints(t,values));if(t!==trackNow())return;const s=t.getSettings?.()||{};const mismatch=Object.entries(values).some(([k,v])=>s[k]!=null&&(typeof v==='number'?Math.abs(s[k]-v)>.01:s[k]!==v));camMessage(mismatch?'Browser did not apply the exact requested setting.':'Camera setting requested.');}catch(e){camMessage('Setting unavailable: '+e.message);}finally{if(t===trackNow()){adjusting=false;await refreshCamera();}}}
 $('profile').onchange=()=>{setPreset();saveCamera();};for(const k of ['resolution','fps'])$(k).onchange=()=>{$('profile').value='custom';saveCamera();};$('cameraSource').onchange=()=>{desiredSource=$('cameraSource').value;saveCamera();};
 $('targetOffset').oninput=()=>{$('target').style.bottom=$('targetOffset').value+'%';invalidate();saveCamera();};$('target').style.bottom=$('targetOffset').value+'%';
 $('zoom').oninput=()=>{$('zoomValue').textContent=$('zoom').value+'×';};$('zoom').onchange=()=>changeTrack({zoom:Number($('zoom').value)});$('focusMode').onchange=()=>changeTrack({focusMode:$('focusMode').value});$('focusDistance').oninput=()=>{$('distanceValue').textContent=$('focusDistance').value;};$('focusDistance').onchange=()=>changeTrack({focusMode:'manual',focusDistance:Number($('focusDistance').value)});
 $('pauseScan').onclick=()=>{paused=!paused;invalidate();$('pauseScan').textContent=paused?'Resume scanning':'Pause scanning';status(paused?'Scanning paused. Adjust camera or card.':'Scanning resumed.');};
 $('applyCamera').onclick=async()=>{saveCamera();if(!stream){camMessage('Settings saved. Start camera to apply.');return;}const t=trackNow();if(adjusting)return;adjusting=true;invalidate();try{const req=cameraRequest().video;const current=t.getSettings?.()||{};if(desiredSource!==openedSource){// restart through normal lifecycle, waiting for outstanding recognition
 stop();const restartRun=run;while(busy&&run===restartRun)await delay(50);if(run===restartRun)void start();return;}
-const {width,height,frameRate}=req;await t.applyConstraints({width,height,frameRate});camMessage('Requested settings applied; check actual resolution below.');}catch(e){camMessage('Could not apply settings: '+e.message);}finally{adjusting=false;await refreshCamera();}};
+const {width,height,frameRate}=req;await t.applyConstraints(mergedCameraConstraints(t,{width,height,frameRate}));camMessage('Requested settings applied; check actual resolution below.');}catch(e){camMessage('Could not apply settings: '+e.message);}finally{adjusting=false;await refreshCamera();}};
 $('resetCamera').onclick=()=>{$('profile').value='auto';desiredSource='';$('cameraSource').value='';setPreset();$('targetOffset').value='3';$('targetOffset').oninput();saveCamera();$('applyCamera').click();};
 // Raw preview runs independently from OCR, including when scanning is paused.
 setInterval(()=>{if(!stream||!video.videoWidth||document.hidden)return;try{const [x,y,w,h]=getRect($('target'));if(w<=0||h<=0)return;const c=$('rawPreview');c.width=Math.min(1000,Math.max(300,Math.round(w*2)));c.height=Math.max(1,Math.round(c.width*h/w));c.getContext('2d').drawImage(video,x,y,w,h,0,0,c.width,c.height);diagnostics();}catch(e){}},400);
