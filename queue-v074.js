@@ -98,6 +98,12 @@ function enqueue(db,job){
  });
 }
 function restore(db){return transaction(db,'readwrite',(s,set)=>{const r=s.getAll();r.onsuccess=()=>{const jobs=recover(r.result);jobs.forEach(j=>s.put(j));set(jobs.length);};});}
+// Only the Queue Lab object store is cleared; the production collection is separate.
+function clearHistory(db){
+ return transaction(db,'readwrite',(store,set)=>{
+  const r=store.clear();r.onsuccess=()=>set(true);
+ });
+}
 function claim(db){return transaction(db,'readwrite',(s,set)=>{const r=s.getAll();r.onsuccess=()=>{const j=r.result.filter(j=>j.state==='queued').sort((a,b)=>a.created-b.created)[0];if(!j){set(null);return;}const next={...j,state:'processing'};s.put(next);set(next);};});}
 function finish(db,id,expected,patch){
  return transaction(db,'readwrite',(s,set)=>{
@@ -106,6 +112,6 @@ function finish(db,id,expected,patch){
   };
  });
 }
-const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,changedBoth,gapEvidence,advanceGap,arrivalEvidence,open,list,enqueue,restore,claim,finish};
+const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,changedBoth,gapEvidence,advanceGap,arrivalEvidence,open,list,enqueue,restore,claim,finish,clearHistory};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RiftQueue=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
