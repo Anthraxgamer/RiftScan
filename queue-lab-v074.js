@@ -80,7 +80,7 @@ async function focus(){
 function stamp(){let n=0;try{n=v.getVideoPlaybackQuality?.().totalVideoFrames||0;}catch(_){}return v.currentTime+':'+n;}
 async function capture(automatic=false){
  if($('capture').disabled)return;
- capturing=true;controls();const token=epoch;let frames=[],last=null,anchor=null;
+ capturing=true;showRearm('CAPTURING CARD · Hold steady');controls();const token=epoch;let frames=[],last=null,anchor=null;
  const settings={sets:$('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean),threshold:Math.min(90,Math.max(40,Number($('threshold').value)||50))};
  try{
   const start=performance.now(),geometry=()=>rect('idZone').map(n=>Math.round(n*2)/2).join(':')+':'+v.videoWidth+':'+v.videoHeight,initialGeometry=geometry();
@@ -105,7 +105,7 @@ async function capture(automatic=false){
   const thumbnail=await blob(thumb,'image/jpeg',.8);
   const job={id:crypto.randomUUID(),created:Date.now(),images,art,thumbnail,settings,frameCount:frames.length,note:'Captured',finish:'review'};
   pendingStore=job;held=true;heldAnchor=anchor;await storePending();
- }catch(e){state(e.message);}
+ }catch(e){state(e.message);if(!pendingStore&&!held)showRearm('READY · Align card and try again');}
  finally{capturing=false;controls();}
 }
 async function storePending(){
@@ -118,7 +118,9 @@ async function storePending(){
   $('receipt').textContent='IMAGE CAPTURED ✓ · '+job.id.slice(0,8)+' · Replace card';
   try{navigator.vibrate?.(70);}catch(_){}
   state('Capture stored. '+($('auto').checked?'Next scan cycle started — remove card.':'Replace card and use Next card.'));
-  try{await refresh();void pump();}catch(e){storageError=e.message;state('Capture is stored, but the queue view failed. Reload to recover: '+e.message);}
+  // Release acquisition immediately after durable storage; list rendering and OCR are separate.
+  if(!jobs.some(j=>j.id===job.id))jobs.push({...job,state:'queued'});
+  void refresh().then(()=>pump()).catch(e=>{storageError=e.message;state('Capture is stored, but the queue view failed. Reload to recover: '+e.message);controls();});
  }catch(e){storageError=e.message;state('Storage error: '+e.message+' · Capture not confirmed; retry storage before leaving.');}
  finally{storing=false;controls();}
 }
