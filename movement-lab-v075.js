@@ -3,10 +3,13 @@
 const $=id=>document.getElementById(id),M=RiftMovement,v=$('video'),tracker=new M.Tracker();
 const canvas=document.createElement('canvas');canvas.width=M.W;canvas.height=M.H;const g=canvas.getContext('2d',{willReadFrequently:true});
 let stream=null,opening=false,epoch=0,lastStamp=null,geometry=null,lastFrame=null,trace=[],eventLines=[],lastPhase='',lastLog=0,samples=0,totalMs=0;
-const status=t=>$('state').textContent=t;
+const status=(t,phase='neutral')=>{const node=$('state');if(node.textContent!==t)node.textContent=t;if(node.dataset.phase!==phase)node.dataset.phase=phase;};
+function syncCount(){const count=String(tracker.events);if($('candidateCount').textContent!==count)$('candidateCount').textContent=count;}
+function candidateLabel(type){return ({'same-appearance-after-outward-motion':'Same appearance after outward motion','same-appearance-after-exit':'Same appearance after exit','changed-center-with-old-card-offset':'Changed center / offset old match','new-center-appearance':'New center appearance'})[type]||type;}
+function phaseStyle(phase){return phase==='held'?'held':phase==='replacement'?'replacement':phase==='moving'?'moving':phase==='align'?'neutral':'uncertain';}
 function log(event,data={}){trace.push({ms:Math.round(performance.now()),event,...data});if(trace.length>500)trace.shift();}
 function controls(){const live=!!stream&&!opening;$('start').disabled=opening;$('stop').disabled=!stream&&!opening;$('arm').disabled=!live||!lastFrame;$('reset').disabled=!live;}
-function reset(reason){tracker.reset();lastFrame=null;lastStamp=null;lastPhase='';samples=0;totalMs=0;eventLines=[];$('events').textContent='';$('stats').textContent='0 replacement candidates';$('diag').textContent='No tracking data.';log('reset',{reason});draw(null);controls();}
+function reset(reason){tracker.reset();lastFrame=null;lastStamp=null;lastPhase='';samples=0;totalMs=0;eventLines=[];$('events').textContent='';$('stats').textContent='0 replacement candidates';$('lastCandidate').textContent='Last replacement: none';$('lastCandidate').title='';syncCount();$('diag').textContent='No tracking data.';log('reset',{reason});draw(null);controls();}
 function stop(){epoch++;stream?.getTracks().forEach(t=>t.stop());stream=null;v.srcObject=null;opening=false;geometry=null;reset('camera stopped');status('Camera stopped.');}
 function region(){
  const w=v.videoWidth,h=v.videoHeight;if(!w||!h)return null;
@@ -40,7 +43,7 @@ async function start(){
   if(modes.includes('continuous'))try{const c=t.getConstraints();await t.applyConstraints({...c,advanced:[...(c.advanced||[]),{focusMode:'continuous'}]});}catch(_){}
   if(token!==epoch)return;
   try{const ds=await navigator.mediaDevices.enumerateDevices();if(token!==epoch)return;$('device').replaceChildren(new Option('Automatic rear camera',''),...ds.filter(d=>d.kind==='videoinput').map((d,i)=>new Option(d.label||'Camera '+i,d.deviceId)));const actual=t.getSettings?.().deviceId;if([...$('device').options].some(o=>o.value===actual))$('device').value=actual;}catch(_){}
-  if(token!==epoch)return;layout();status('Align one card, then mark reference. '+t.label+' · '+v.videoWidth+'×'+v.videoHeight);log('camera opened',{label:t.label,resolution:[v.videoWidth,v.videoHeight]});
+  if(token!==epoch)return;$('cameraSettings').open=false;layout();$('liveStage').scrollIntoView({block:'start',behavior:'auto'});status('Align one card, then mark reference. '+t.label+' · '+v.videoWidth+'×'+v.videoHeight);log('camera opened',{label:t.label,resolution:[v.videoWidth,v.videoHeight]});
  }catch(e){if(token===epoch){stop();status('Camera error: '+e.message);}}
  finally{if(token===epoch){opening=false;controls();}}
 }
@@ -59,14 +62,14 @@ function sample(){
   const detail={phase:result.phase,art:{dx:result.art.dx,dy:result.art.dy,error:fmt(result.art.error)},id:{dx:result.id.dx,dy:result.id.dy,error:fmt(result.id.error)},coherent:result.coherent,away:result.away,bothLost:result.bothLost,different:result.different,still:result.still,textured:result.textured,moved:result.moved,lost:result.lost,snap:result.snap,stable:result.stable,fixedArt:fmt(result.fixedArt),fixedId:fmt(result.fixedId),newCenter:result.newCenter,farAway:result.farAway,singleOut:result.singleOut};
   $('diag').textContent='Artwork Δ '+detail.art.dx+', '+detail.art.dy+' · error '+(detail.art.error??'lost')+' | ID Δ '+detail.id.dx+', '+detail.id.dy+' · error '+(detail.id.error??'lost')+' | coherent '+(detail.coherent?'yes':'no')+' · settled '+detail.stable+'/3'+' · center differences A / ID '+(detail.fixedArt??'lost')+' / '+(detail.fixedId??'lost');
   if(lastPhase!==result.phase||now-lastLog>=500||result.event){log('sample',detail);lastPhase=result.phase;lastLog=now;}
-  status(result.event?'REPLACEMENT CANDIDATE #'+result.event.index+' · '+result.event.type:result.phase.toUpperCase());
+  status(result.event?'REPLACEMENT #'+result.event.index:result.phase.toUpperCase(),phaseStyle(result.phase));
  }else status('Align card and mark reference');
- if(result.event){log('replacement candidate',result.event);eventLines.unshift('#'+result.event.index+' · '+result.event.type+' · '+Math.round(now)+'ms');eventLines=eventLines.slice(0,100);$('events').textContent=eventLines.join('\n');try{navigator.vibrate?.(60);}catch(_){}}
- $('stats').textContent=tracker.events+' replacement candidates · '+samples+' samples · '+(totalMs/samples).toFixed(1)+'ms average tracker work';
+ if(result.event){const label='Last #'+result.event.index+' · '+candidateLabel(result.event.type);$('lastCandidate').textContent=label;$('lastCandidate').title=label;log('replacement candidate',result.event);eventLines.unshift('#'+result.event.index+' · '+result.event.type+' · '+Math.round(now)+'ms');eventLines=eventLines.slice(0,100);$('events').textContent=eventLines.join('\n');try{navigator.vibrate?.(60);}catch(_){}}
+ syncCount();$('stats').textContent=tracker.events+' replacement candidates · '+samples+' samples · '+(totalMs/samples).toFixed(1)+'ms average tracker work';
  controls();
 }
 $('start').onclick=start;$('stop').onclick=stop;
-$('arm').onclick=()=>{if(!lastFrame)return;if(tracker.arm(lastFrame)){status('HELD · Reference marked. Move or cover the card.');log('reference marked');draw(null);}else status('Reference too low contrast. Align card and improve light.');};
+$('arm').onclick=()=>{if(!lastFrame)return;if(tracker.arm(lastFrame)){status('HELD · Reference marked.','held');log('reference marked');draw(null);}else status('Reference too low contrast. Align card and improve light.');};
 $('reset').onclick=()=>{reset('manual reset');status('Align one card and mark reference again.');};
 function showZone(){const name=$('zoneSelect').value,z=M.zones[name];$('zoneInfo').textContent=name.toUpperCase()+' · X '+z.x+' · Y '+z.y+' · Width '+z.w+' · Height '+z.h;}
 function zoneChanged(){reset('tracking regions adjusted');log('zones',{zones:JSON.parse(JSON.stringify(M.zones))});showZone();status('Regions adjusted. Mark the card again when aligned.');}
@@ -74,7 +77,7 @@ $('zoneSelect').onchange=showZone;
 for(const button of document.querySelectorAll('[data-adjust]'))button.onclick=()=>{const name=$('zoneSelect').value,[key,delta]=button.dataset.adjust.split(':'),z={...M.zones[name]};z[key]+=Number(delta);if(M.setZone(name,z))zoneChanged();else status('Region cannot extend beyond tracking area or become too small.');};
 $('zoneDefaults').onclick=()=>{for(const name of Object.keys(M.defaults))M.setZone(name,M.defaults[name]);zoneChanged();};
 showZone();
-$('export').onclick=()=>{const payload={version:'0.7.5.1',zones:JSON.parse(JSON.stringify(M.zones)),camera:stream?.getVideoTracks()[0]?.label||null,resolution:[v.videoWidth,v.videoHeight],candidates:tracker.events,samples,averageMs:samples?totalMs/samples:null,trace};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-movement-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('export').onclick=()=>{const payload={version:'0.7.5.2',zones:JSON.parse(JSON.stringify(M.zones)),camera:stream?.getVideoTracks()[0]?.label||null,resolution:[v.videoWidth,v.videoHeight],candidates:tracker.events,samples,averageMs:samples?totalMs/samples:null,trace};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-movement-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 v.addEventListener('resize',layout);window.addEventListener('resize',layout);window.addEventListener('pagehide',stop);
 setInterval(()=>{try{sample();}catch(e){status('Tracking error: '+e.message);log('error',{message:e.message});}},100);draw(null);controls();
 })();
