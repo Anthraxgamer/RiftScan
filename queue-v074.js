@@ -46,6 +46,37 @@ function emptyProgress(old,p,departed,now,stamp){
  const count=contiguous?old.count+1:1,since=contiguous?old.since:now;
  return {count,since,last:now,stamp,ready:count>=3&&now-since>=200};
 }
+// Capture-cycle state is independent of OCR and persistent queue jobs.
+function changedBoth(a,b){
+ if(!a||!b)return false;
+ const art=exposureDiff(a.art,b.art),id=exposureDiff(a.id,b.id);
+ return Number.isFinite(art.raw)&&Number.isFinite(id.raw)&&
+  (art.residual>14||art.raw>42)&&(id.residual>12||id.raw>42);
+}
+function gapEvidence(base,anchor,sample,previous){
+ const p=presence(base,sample,previous);
+ const departed=departure(anchor,sample);
+ if(p.empty&&departed)return {kind:'calibrated',p};
+ // Fallback when exposure/shadow changes prevent a background match.
+ // Both zones must change, the collector strip must lose text-like edges,
+ // and the new view must settle. A mere movement or blurry frame is not enough.
+ if(!sample.text&&p.stable&&changedBoth(anchor,sample))return {kind:'changed-gap',p};
+ return {kind:null,p};
+}
+function advanceGap(old,evidence,now,stamp){
+ if(old&&old.stamp===stamp)return old;
+ if(!evidence.kind)return {kind:null,count:0,since:now,last:now,stamp,ready:false};
+ const contiguous=old&&old.kind===evidence.kind&&now-old.last<=650;
+ const count=contiguous?old.count+1:1,since=contiguous?old.since:now;
+ const fallback=evidence.kind==='changed-gap';
+ return {kind:evidence.kind,count,since,last:now,stamp,ready:count>=(fallback?4:3)&&now-since>=(fallback?300:200)};
+}
+function arrivalEvidence(base,gap,sample,previous){
+ const p=presence(base,sample,previous);
+ if(!sample.text||!p.stable)return false;
+ if(gap)return changedBoth(gap,sample);
+ return p.present;
+}
 function open(){
  return new Promise((resolve,reject)=>{
   const r=indexedDB.open('riftscan-queue-lab-v1',1);
@@ -75,6 +106,6 @@ function finish(db,id,expected,patch){
   };
  });
 }
-const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,open,list,enqueue,restore,claim,finish};
+const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,changedBoth,gapEvidence,advanceGap,arrivalEvidence,open,list,enqueue,restore,claim,finish};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RiftQueue=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
