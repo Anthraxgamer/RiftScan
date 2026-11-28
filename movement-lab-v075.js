@@ -24,8 +24,8 @@ function draw(r){
   const z=M.zones[name],fixed=$('fixed'+suffix),moving=$('moving'+suffix),match=r?.[name];
   for(const node of [fixed,moving]){node.setAttribute('width',z.w);node.setAttribute('height',z.h);}
   fixed.setAttribute('x',z.x);fixed.setAttribute('y',z.y);
-  const good=match&&match.error<M.cfg.loss;
-  moving.setAttribute('x',z.x+(good?match.dx:0));moving.setAttribute('y',z.y+(good?match.dy:0));
+  const good=match?match.error<M.cfg.loss:!!tracker.anchor;
+  moving.setAttribute('x',z.x+(good&&match?match.dx:0));moving.setAttribute('y',z.y+(good&&match?match.dy:0));
   moving.setAttribute('stroke',good?'#53e5ae':'#ef7777');moving.setAttribute('visibility',tracker.anchor?'visible':'hidden');
  }
 }
@@ -53,11 +53,11 @@ function sample(){
  const data=g.getImageData(0,0,M.W,M.H).data,p=new Uint8Array(M.W*M.H);
  for(let i=0;i<p.length;i++)p[i]=.299*data[i*4]+.587*data[i*4+1]+.114*data[i*4+2];
  lastFrame={w:M.W,h:M.H,p};const result=tracker.step(lastFrame,now,key);if(!result){controls();return;}
- samples++;totalMs+=performance.now()-now;draw(result);
+ samples++;totalMs+=performance.now()-now;draw(result.event?null:result);
  const fmt=n=>Number.isFinite(n)?Number(n.toFixed(2)):null;
  if(result.art){
-  const detail={phase:result.phase,art:{dx:result.art.dx,dy:result.art.dy,error:fmt(result.art.error)},id:{dx:result.id.dx,dy:result.id.dy,error:fmt(result.id.error)},coherent:result.coherent,away:result.away,bothLost:result.bothLost,different:result.different,still:result.still,textured:result.textured,moved:result.moved,lost:result.lost,snap:result.snap,stable:result.stable};
-  $('diag').textContent='Artwork Δ '+detail.art.dx+', '+detail.art.dy+' · error '+(detail.art.error??'lost')+' | ID Δ '+detail.id.dx+', '+detail.id.dy+' · error '+(detail.id.error??'lost')+' | coherent '+(detail.coherent?'yes':'no')+' · settled '+detail.stable+'/3';
+  const detail={phase:result.phase,art:{dx:result.art.dx,dy:result.art.dy,error:fmt(result.art.error)},id:{dx:result.id.dx,dy:result.id.dy,error:fmt(result.id.error)},coherent:result.coherent,away:result.away,bothLost:result.bothLost,different:result.different,still:result.still,textured:result.textured,moved:result.moved,lost:result.lost,snap:result.snap,stable:result.stable,fixedArt:fmt(result.fixedArt),fixedId:fmt(result.fixedId),newCenter:result.newCenter,farAway:result.farAway,singleOut:result.singleOut};
+  $('diag').textContent='Artwork Δ '+detail.art.dx+', '+detail.art.dy+' · error '+(detail.art.error??'lost')+' | ID Δ '+detail.id.dx+', '+detail.id.dy+' · error '+(detail.id.error??'lost')+' | coherent '+(detail.coherent?'yes':'no')+' · settled '+detail.stable+'/3'+' · center differences A / ID '+(detail.fixedArt??'lost')+' / '+(detail.fixedId??'lost');
   if(lastPhase!==result.phase||now-lastLog>=500||result.event){log('sample',detail);lastPhase=result.phase;lastLog=now;}
   status(result.event?'REPLACEMENT CANDIDATE #'+result.event.index+' · '+result.event.type:result.phase.toUpperCase());
  }else status('Align card and mark reference');
@@ -68,7 +68,13 @@ function sample(){
 $('start').onclick=start;$('stop').onclick=stop;
 $('arm').onclick=()=>{if(!lastFrame)return;if(tracker.arm(lastFrame)){status('HELD · Reference marked. Move or cover the card.');log('reference marked');draw(null);}else status('Reference too low contrast. Align card and improve light.');};
 $('reset').onclick=()=>{reset('manual reset');status('Align one card and mark reference again.');};
-$('export').onclick=()=>{const payload={version:'0.7.5',camera:stream?.getVideoTracks()[0]?.label||null,resolution:[v.videoWidth,v.videoHeight],candidates:tracker.events,samples,averageMs:samples?totalMs/samples:null,trace};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-movement-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+function showZone(){const name=$('zoneSelect').value,z=M.zones[name];$('zoneInfo').textContent=name.toUpperCase()+' · X '+z.x+' · Y '+z.y+' · Width '+z.w+' · Height '+z.h;}
+function zoneChanged(){reset('tracking regions adjusted');log('zones',{zones:JSON.parse(JSON.stringify(M.zones))});showZone();status('Regions adjusted. Mark the card again when aligned.');}
+$('zoneSelect').onchange=showZone;
+for(const button of document.querySelectorAll('[data-adjust]'))button.onclick=()=>{const name=$('zoneSelect').value,[key,delta]=button.dataset.adjust.split(':'),z={...M.zones[name]};z[key]+=Number(delta);if(M.setZone(name,z))zoneChanged();else status('Region cannot extend beyond tracking area or become too small.');};
+$('zoneDefaults').onclick=()=>{for(const name of Object.keys(M.defaults))M.setZone(name,M.defaults[name]);zoneChanged();};
+showZone();
+$('export').onclick=()=>{const payload={version:'0.7.5.1',zones:JSON.parse(JSON.stringify(M.zones)),camera:stream?.getVideoTracks()[0]?.label||null,resolution:[v.videoWidth,v.videoHeight],candidates:tracker.events,samples,averageMs:samples?totalMs/samples:null,trace};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-movement-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 v.addEventListener('resize',layout);window.addEventListener('resize',layout);window.addEventListener('pagehide',stop);
 setInterval(()=>{try{sample();}catch(e){status('Tracking error: '+e.message);log('error',{message:e.message});}},100);draw(null);controls();
 })();
