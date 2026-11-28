@@ -200,7 +200,7 @@ async function pump(){
 }
 function button(label,action){const b=document.createElement('button');b.textContent=label;b.onclick=action;return b;}
 async function refresh(){
- jobs=await Q.list(db);const n=Q.counts(jobs);$('stats').textContent=jobs.length+' captured · '+n.queued+' queued · '+n.processing+' processing · '+n.saved+' IDs saved · '+n.review+' ID review · '+jobs.filter(j=>j.state==='discarded').length+' discarded';
+ const latest=await Q.list(db);if(clearing)return;jobs=latest;const n=Q.counts(jobs);$('stats').textContent=jobs.length+' captured · '+n.queued+' queued · '+n.processing+' processing · '+n.saved+' IDs saved · '+n.review+' ID review · '+jobs.filter(j=>j.state==='discarded').length+' discarded';
  const list=$('jobs');list.replaceChildren();
  for(const j of [...jobs].reverse()){
   const a=document.createElement('article'),p=document.createElement('p');p.textContent='#'+j.id.slice(0,8)+' · '+j.state.toUpperCase()+(j.result?' · '+j.result.set+' '+j.result.num:'')+' · '+(j.note||'');a.append(p);
@@ -231,18 +231,16 @@ async function clearScanHistory(){
  const count=jobs.length;
  if(!confirm('Permanently clear all '+count+' stored Queue Lab captures, including saved cards, pending jobs, review images and discarded records?'+(pendingStore?' The unstored capture will also be discarded.':'')+' Your regular RiftScan collection will not be affected.'))return;
  clearing=true;controls();stop();closeReview();state('Clearing Queue Lab history…');
- try{
-  await Q.clearHistory(db);
-  // No new acquisition can begin. A late OCR finish only updates an existing
-  // job, so it cannot recreate a deleted capture.
-  active=false;pendingStore=null;jobs=[];held=false;heldAnchor=null;arrivalReference=null;rearms=0;storageError='';
-  $('jobs').replaceChildren();$('stats').textContent='0 captures';$('receipt').textContent='No capture yet';
-  state('History cleared. Restarting Queue Lab…');
-  location.reload();
- }catch(e){
+ try{await Q.clearHistory(db);}
+ catch(e){
   clearing=false;state('Could not clear history: '+e.message+' · Stored captures were not cleared. Camera stopped.');controls();
-  void refresh().then(()=>pump()).catch(()=>{});
+  void refresh().then(()=>pump()).catch(()=>{});return;
  }
+ // A late OCR finish only updates an existing job; it cannot recreate one.
+ active=false;pendingStore=null;jobs=[];held=false;heldAnchor=null;arrivalReference=null;rearms=0;storageError='';
+ $('jobs').replaceChildren();$('stats').textContent='0 captures';$('receipt').textContent='No capture yet';
+ state('History cleared. Restarting Queue Lab…');
+ location.reload();
 }
 $('clearHistory').onclick=clearScanHistory;
 $('export').onclick=()=>{const data=jobs.map(({images,art,thumbnail,...j})=>j),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-queue-lab.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
