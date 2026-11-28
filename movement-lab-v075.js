@@ -56,10 +56,10 @@ function sample(){
  samples++;totalMs+=performance.now()-now;draw(result);
  const fmt=n=>Number.isFinite(n)?Number(n.toFixed(2)):null;
  if(result.art){
-  const detail={phase:result.phase,art:{dx:result.art.dx,dy:result.art.dy,error:fmt(result.art.error)},id:{dx:result.id.dx,dy:result.id.dy,error:fmt(result.id.error)},coherent:result.coherent,away:result.away,bothLost:result.bothLost,different:result.different,still:result.still,textured:result.textured,moved:result.moved,lost:result.lost,stable:result.stable};
+  const detail={phase:result.phase,art:{dx:result.art.dx,dy:result.art.dy,error:fmt(result.art.error)},id:{dx:result.id.dx,dy:result.id.dy,error:fmt(result.id.error)},coherent:result.coherent,away:result.away,bothLost:result.bothLost,different:result.different,still:result.still,textured:result.textured,moved:result.moved,lost:result.lost,snap:result.snap,stable:result.stable};
   $('diag').textContent='Artwork Δ '+detail.art.dx+', '+detail.art.dy+' · error '+(detail.art.error??'lost')+' | ID Δ '+detail.id.dx+', '+detail.id.dy+' · error '+(detail.id.error??'lost')+' | coherent '+(detail.coherent?'yes':'no')+' · settled '+detail.stable+'/3';
   if(lastPhase!==result.phase||now-lastLog>=500||result.event){log('sample',detail);lastPhase=result.phase;lastLog=now;}
-  status(result.event?'REPLACEMENT CANDIDATE #'+result.event.index:result.phase.toUpperCase());
+  status(result.event?'REPLACEMENT CANDIDATE #'+result.event.index+' · '+result.event.type:result.phase.toUpperCase());
  }else status('Align card and mark reference');
  if(result.event){log('replacement candidate',result.event);eventLines.unshift('#'+result.event.index+' · '+result.event.type+' · '+Math.round(now)+'ms');eventLines=eventLines.slice(0,100);$('events').textContent=eventLines.join('\n');try{navigator.vibrate?.(60);}catch(_){}}
  $('stats').textContent=tracker.events+' replacement candidates · '+samples+' samples · '+(totalMs/samples).toFixed(1)+'ms average tracker work';
