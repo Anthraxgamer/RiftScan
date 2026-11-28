@@ -23,11 +23,11 @@ function match(a,f,z,range=cfg.range){
 function textured(d){return d.art?.sd>=7&&d.id?.sd>=5;}
 class Tracker{
  constructor(){this.reset();}
- reset(){this.anchor=null;this.prev=null;this.lastStamp=null;this.lastTime=null;this.moved=false;this.lost=false;this.changed=false;this.stable=0;this.events=0;this.phase='align';}
- arm(f){const d=describe(f);if(!textured(d))return false;this.anchor=d;this.prev=d;this.moved=this.lost=this.changed=false;this.stable=0;this.phase='held';return true;}
+ reset(){this.anchor=null;this.prev=null;this.lastStamp=null;this.lastTime=null;this.moved=false;this.lost=false;this.changed=false;this.snap=false;this.lastAway=0;this.stable=0;this.events=0;this.phase='align';}
+ arm(f){const d=describe(f);if(!textured(d))return false;this.anchor=d;this.prev=d;this.moved=this.lost=this.changed=this.snap=false;this.lastAway=0;this.stable=0;this.phase='held';return true;}
  step(f,now,stamp){
   if(stamp===this.lastStamp)return null;
-  if(this.lastTime!==null&&now-this.lastTime>500){this.stable=0;this.moved=this.lost=this.changed=false;this.prev=null;}
+  if(this.lastTime!==null&&now-this.lastTime>500){this.stable=0;this.moved=this.lost=this.changed=this.snap=false;this.lastAway=0;this.prev=null;}
   this.lastTime=now;this.lastStamp=stamp;
   const d=describe(f),prev=this.prev;this.prev=d;
   const still=!!prev&&error(prev.art,d.art)<cfg.stable&&error(prev.id,d.id)<cfg.stable;
@@ -41,21 +41,25 @@ class Tracker{
   const fixedArt=error(this.anchor.art,d.art),fixedId=error(this.anchor.id,d.id);
   const different=fixedArt>=cfg.loss&&fixedId>=cfg.loss;
   const bothLost=!artOK&&!idOK;
-  if(away)this.moved=true;
+  // An identical undercard can make a template jump from a displaced old card to center.
+  // This is an ambiguous candidate, not proof of physical replacement.
+  if(centered&&this.lastAway>=18)this.snap=true;
+  this.lastAway=away?Math.min(da,di):0;
+  if(away){this.moved=true;this.snap=false;}
   if(bothLost&&this.moved)this.lost=true;
   // A new card covering the old one may have no trackable translation.
   if(bothLost&&different)this.changed=true;
   const onNew=different&&bothLost;
-  const possibleSame=this.moved&&this.lost&&centered;
+  const possibleSame=this.moved&&(this.lost||this.snap)&&centered;
   const candidate=textured(d)&&still&&(onNew&&this.changed||possibleSame);
   this.stable=candidate?this.stable+1:0;
   let event=null;
   if(this.stable>=3){
-   event={type:possibleSame?'same-appearance-after-exit':'new-appearance',ambiguous:true,index:++this.events};
+   event={type:possibleSame?(this.snap?'same-appearance-after-outward-motion':'same-appearance-after-exit'):'new-appearance',ambiguous:true,index:++this.events};
    this.arm(f);this.phase='replacement';
-  }else if(centered&&!this.lost){this.moved=this.changed=false;this.phase='held';}
-  else this.phase=away?'moving':bothLost?'occluded / lost':candidate?'settling':'uncertain';
-  return {phase:this.phase,art,id,da,di,coherent,away,centered,bothLost,different,still,textured:textured(d),moved:this.moved,lost:this.lost,stable:this.stable,event};
+  }else if(centered&&!this.lost&&!this.snap){this.moved=this.changed=false;this.phase='held';}
+  else this.phase=candidate?'settling':away?'moving':bothLost?'occluded / lost':'uncertain';
+  return {phase:this.phase,art,id,da,di,coherent,away,centered,bothLost,different,still,textured:textured(d),moved:this.moved,lost:this.lost,snap:this.snap,stable:this.stable,event};
  }
 }
 const api={W,H,zones,cfg,patch,error,match,describe,Tracker};
