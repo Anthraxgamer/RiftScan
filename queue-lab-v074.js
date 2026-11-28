@@ -2,8 +2,10 @@
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id),Q=RiftQueue,C=RiftCore,v=$('video');
-let db=null,stream=null,epoch=0,opening=false,capturing=false,storing=false,held=false,base=null,previous=null,stable=0,presentSince=0,detectBusy=false;
-let heldAnchor=null,baseGeometry=null,emptyRun=null,lastDetectStamp=null,lastDetectAt=0,rearms=0,arrivalReference=null,arrivalSince=0,cycleStarted=0;
+let db=null,stream=null,epoch=0,opening=false,capturing=false,storing=false,held=false,base=null,detectBusy=false;
+let heldAnchor=null,baseGeometry=null,rearms=0,cycle=null;
+const trace=[];let lastTraceAt=0,lastTraceReason='';
+function logEvent(event,detail={}){trace.push({time:Math.round(performance.now()),event,...detail});if(trace.length>200)trace.shift();}
 let clearing=false, jobs=[],storageError='',pendingStore=null,worker=null,processing=false,workerPaused=false,active=true,reviewId=null,reviewURL=null,releaseLock=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),state=s=>$('state').textContent=s,work=s=>$('workerState').textContent=s;
 const track=()=>stream?.getVideoTracks()[0];
@@ -17,8 +19,8 @@ function controls(){
  $('auto').disabled=!base||!camera||!!pendingStore;$('retryStore').disabled=!pendingStore||capturing||storing;
  $('resume').disabled=!db||processing;$('export').disabled=!db||!jobs.length;$('clearHistory').disabled=!db||opening||capturing||storing||(!jobs.length&&!pendingStore);
 }
-function resetSamples(){previous=null;stable=0;presentSince=0;arrivalSince=0;emptyRun=null;lastDetectStamp=null;lastDetectAt=0;}
-function clearDetection(reason='Not calibrated'){base=null;baseGeometry=null;arrivalReference=null;resetSamples();$('auto').checked=false;$('detect').textContent=reason;$('rearmStatus').textContent='Manual mode · '+reason;}
+function resetSamples(){cycle=null;}
+function clearDetection(reason='Not calibrated'){base=null;baseGeometry=null;resetSamples();logEvent('calibration cleared',{reason});$('auto').checked=false;$('detect').textContent=reason;$('rearmStatus').textContent='Manual mode · '+reason;}
 function stop(){epoch++;stream?.getTracks().forEach(t=>t.stop());stream=null;v.srcObject=null;opening=false;clearDetection();state('Camera stopped. Stored jobs can continue processing.');controls();}
 function layout(){
  const b=$('view').getBoundingClientRect();if(!v.videoWidth||!b.width||!b.height)return;
@@ -79,7 +81,7 @@ async function focus(){
  finally{if(token===epoch){opening=false;controls();}}
 }
 function stamp(){let n=0;try{n=v.getVideoPlaybackQuality?.().totalVideoFrames||0;}catch(_){}return v.currentTime+':'+n;}
-async function capture(automatic=false){
+async function capture(automatic=false,reference=null){
  if($('capture').disabled)return;
  capturing=true;showRearm('CAPTURING CARD · Hold steady');controls();const token=epoch;let frames=[],last=null,anchor=null;
  const settings={sets:$('sets').value.toUpperCase().split(/[,\s]+/).filter(Boolean),threshold:Math.min(90,Math.max(40,Number($('threshold').value)||50))};
@@ -89,9 +91,9 @@ async function capture(automatic=false){
    if(geometry()!==initialGeometry)throw Error('Crop geometry changed; align and capture again');
    const key=stamp();
    if(v.readyState>=2&&key!==last){last=key;const current=sample();
-    if(automatic&&(!current.text||(!anchor&&!(arrivalReference?Q.changedBoth(arrivalReference,current):Q.presence(base,current,previous).present))||(anchor&&Q.departure(anchor,current)))){
+    if(automatic&&!Q.frameCompatible(anchor||reference,current)){
      if(frames.length)break;
-     throw Error('Card moved or text disappeared before capture; present it again');
+     throw Error('Card changed before capture; align again');
     }
     if(!anchor)anchor=current;const native=rect('idZone');const id=crop('idZone',Math.max(1,Math.min(1200,Math.round(native[2])))),art=crop('artZone',128);const quality=score(id);frames.push({id,art,quality,stamp:key,thumb:frames.length?null:crop('guide',180)});state('Capturing '+frames.length+'/4');}
    if(frames.length<4)await sleep(70);
@@ -105,8 +107,8 @@ async function capture(automatic=false){
   const art=await Promise.all(frames.map(f=>blob(f.art,'image/jpeg',.8)));
   const thumbnail=await blob(thumb,'image/jpeg',.8);
   const job={id:crypto.randomUUID(),created:Date.now(),images,art,thumbnail,settings,frameCount:frames.length,note:'Captured',finish:'review'};
-  pendingStore=job;held=true;heldAnchor=anchor;await storePending();
- }catch(e){state(e.message);if(!pendingStore&&!held)showRearm('READY · Align card and try again');}
+  pendingStore=job;held=true;heldAnchor=anchor;logEvent('frames retained',{id:job.id,frames:frames.length,sharpness:ranked.map(f=>Math.round(f.quality.sharp*10)/10)});await storePending();
+ }catch(e){logEvent('capture failed',{reason:e.message});state(e.message);if(!pendingStore&&!held)showRearm('READY · Align card and try again');}
  finally{capturing=false;controls();}
 }
 async function storePending(){
@@ -115,7 +117,7 @@ async function storePending(){
  try{
   const job=pendingStore,result=await Q.enqueue(db,job);
   if(result!=='ok'&&result!=='duplicate'){state('Queue full. Image held in memory; retry storage after resolving jobs.');return;}
-  pendingStore=null;held=true;resetSamples();arrivalReference=null;cycleStarted=performance.now();storageError='';showRearm($('auto').checked?'LOOKING FOR NEXT CARD · Remove captured card':'CAPTURE LOCKED · Manual next card');
+  pendingStore=null;held=true;resetSamples();storageError='';logEvent('stored',{id:job.id,frames:job.frameCount});showRearm($('auto').checked?'LOOKING FOR NEXT CARD · Remove captured card':'CAPTURE LOCKED · Manual next card');
   $('receipt').textContent='IMAGE CAPTURED ✓ · '+job.id.slice(0,8)+' · Replace card';
   try{navigator.vibrate?.(70);}catch(_){}
   state('Capture stored. '+($('auto').checked?'Next scan cycle started — remove card.':'Replace card and use Next card.'));
@@ -129,30 +131,26 @@ async function detect(){
  if(clearing||detectBusy||!base||!stream||opening||capturing||pendingStore||document.hidden)return;
  detectBusy=true;
  try{
-  if(!geometryMatches(baseGeometry,geometrySignature())){clearDetection('Camera crop changed. Remove card and recalibrate.');controls();return;}
-  const now=performance.now(),fresh=stamp();
-  if(fresh===lastDetectStamp)return;
-  if(lastDetectAt&&now-lastDetectAt>650)resetSamples();
-  lastDetectStamp=fresh;lastDetectAt=now;
-  const s=sample(),prior=previous,p=Q.presence(base,s,prior);previous=s;
+  if(!geometryMatches(baseGeometry,geometrySignature())){clearDetection('Camera crop changed. Remove card and recalibrate.');state('Automatic capture paused: crop changed. Recalibrate empty surface.');controls();return;}
   if(!$('auto').checked){showRearm(held?'CAPTURE LOCKED · Automatic capture off':'READY · Automatic capture off');return;}
-  if(held){
-   const gap=Q.gapEvidence(base,heldAnchor,s,prior);
-   emptyRun=Q.advanceGap(emptyRun,gap,now,fresh);
-   $('detect').textContent='Departure: '+(Q.departure(heldAnchor,s)?'yes':'no')+' · gap: '+(gap.kind||'not detected')+' · '+emptyRun.count+' samples · artwork / ID '+p.art.toFixed(1)+' / '+p.id.toFixed(1)+' · text '+(s.text?'yes':'no');
-   if(emptyRun.ready){
-    arrivalReference=s;held=false;heldAnchor=null;rearms++;stable=0;arrivalSince=0;emptyRun=null;
-    state('READY FOR NEXT CARD · Present a card');showRearm('READY FOR NEXT CARD');controls();return;
-   }
-   showRearm(gap.kind?'LOOKING FOR NEXT CARD · Checking removal '+emptyRun.count+'/'+(gap.kind==='calibrated'?3:4):'LOOKING FOR NEXT CARD · '+(now-cycleStarted>4000?'Remove fully / use Next card if needed':'Remove captured card'));
-   return;
+  const now=performance.now(),fresh=stamp();
+  if(cycle?.stamp===fresh)return;
+  const sampleNow=sample(),stage=held?'remove':'search';
+  if(cycle?.stage!==stage)cycle=null;
+  cycle=Q.cycleStep(cycle||{stage,count:0},{base,anchor:heldAnchor,sample:sampleNow,now,stamp:fresh});
+  const e=cycle.e,fmt=n=>Number.isFinite(n)?n.toFixed(1):'—';
+  const detail={stage:cycle.stage,reason:cycle.reason,bgArt:fmt(e.bg.art),bgId:fmt(e.bg.id),oldArt:fmt(e.old.art),oldId:fmt(e.old.id),stable:e.stable,empty:e.empty,present:e.present,departed:e.departed,text:e.text,count:cycle.count};
+  $('detect').textContent=cycle.reason+' · background artwork / ID '+detail.bgArt+' / '+detail.bgId+' · prior card '+detail.oldArt+' / '+detail.oldId+' · stable '+(e.stable?'yes':'no')+' · text hint '+(e.text?'yes':'no')+' · samples '+cycle.count;
+  if(cycle.reason!==lastTraceReason||now-lastTraceAt>=500||cycle.action){logEvent('detector',detail);lastTraceAt=now;lastTraceReason=cycle.reason;}
+  if(cycle.action==='rearm'){
+   held=false;heldAnchor=null;rearms++;logEvent('rearmed',{rearms});state('READY FOR NEXT CARD · Present a card');showRearm('READY FOR NEXT CARD');controls();return;
   }
-  const arrival=Q.arrivalEvidence(base,arrivalReference,s,prior);
-  if(arrival){if(!stable)arrivalSince=now;stable++;}else{stable=0;arrivalSince=0;}
-  $('detect').textContent='Arrival: '+(arrival?'yes':'no')+' · stable '+stable+' · text '+(s.text?'yes':'no')+' · artwork / ID '+p.art.toFixed(1)+' / '+p.id.toFixed(1);
-  showRearm(arrival?'CARD DETECTED · Settling / checking text':s.text?'SEARCHING · Align collector ID':'READY FOR NEXT CARD');
-  if(stable>=3&&now-arrivalSince>=200&&!$('capture').disabled){await capture(true);stable=0;arrivalSince=0;}
- }catch(e){$('detect').textContent='Detection unavailable: '+e.message;showRearm('Detection error · '+e.message);}
+  if(held){showRearm('REMOVE CAPTURED CARD · '+cycle.reason);return;}
+  const full=Q.admission(jobs,'new-id')==='full';
+  if(full||storageError){showRearm(full?'QUEUE FULL · Resolve review entries':'STORAGE ERROR · See status');return;}
+  showRearm(cycle.reason==='Empty surface'?'READY FOR NEXT CARD':cycle.reason.toUpperCase());
+  if(cycle.action==='capture'&&!$('capture').disabled){logEvent('automatic capture requested');await capture(true,sampleNow);cycle=null;}
+ }catch(e){logEvent('detector error',{reason:e.message});$('detect').textContent='Detection unavailable: '+e.message;showRearm('Detection error · '+e.message);}
  finally{detectBusy=false;}
 }
 function makeVariant(raw,invert,enhance){
@@ -237,7 +235,7 @@ async function clearScanHistory(){
   void refresh().then(()=>pump()).catch(()=>{});return;
  }
  // A late OCR finish only updates an existing job; it cannot recreate one.
- active=false;pendingStore=null;jobs=[];held=false;heldAnchor=null;arrivalReference=null;rearms=0;storageError='';
+ active=false;pendingStore=null;jobs=[];held=false;heldAnchor=null;rearms=0;storageError='';
  $('jobs').replaceChildren();$('stats').textContent='0 captures';$('receipt').textContent='No capture yet';
  state('History cleared. Restarting Queue Lab…');
  location.reload();
@@ -245,9 +243,10 @@ async function clearScanHistory(){
 $('clearHistory').onclick=clearScanHistory;
 $('export').onclick=()=>{const data=jobs.map(({images,art,thumbnail,...j})=>j),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-queue-lab.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('start').onclick=start;$('stop').onclick=stop;$('focus').onclick=focus;$('capture').onclick=()=>capture(false);$('retryStore').onclick=storePending;
-$('arm').onclick=()=>{held=false;heldAnchor=null;arrivalReference=null;resetSamples();state('Manually rearmed. Only use after physically replacing the card.');showRearm('READY FOR NEXT CARD · Manual rearm');controls();};
-$('calibrate').onclick=()=>{if(held&&!confirm('Is the previously captured card completely removed? Calibrating the empty surface will rearm the camera.'))return;try{const next=sample(),g=geometrySignature();base=next;baseGeometry=g;held=false;heldAnchor=null;arrivalReference=null;resetSamples();$('detect').textContent='Empty surface calibrated';$('auto').checked=true;state('Empty surface calibrated. Automatic capture enabled.');showRearm('READY FOR NEXT CARD');controls();}catch(e){state(e.message);}};
-$('auto').onchange=()=>{resetSamples();showRearm($('auto').checked?(held?'CAPTURE LOCKED · Remove card completely':'READY FOR NEXT CARD'):'Manual capture enabled');};
+$('arm').onclick=()=>{held=false;heldAnchor=null;resetSamples();logEvent('manual rearm');state('Manually rearmed. Only use after physically replacing the card.');showRearm('READY FOR NEXT CARD · Manual rearm');controls();};
+$('calibrate').onclick=()=>{if(held&&!confirm('Is the previously captured card completely removed? Calibrating the empty surface will rearm the camera.'))return;try{const next=sample(),g=geometrySignature();base=next;baseGeometry=g;held=false;heldAnchor=null;resetSamples();logEvent('calibrated',{geometry:g});$('detect').textContent='Empty surface calibrated';$('auto').checked=true;state('Empty surface calibrated. Automatic capture enabled.');showRearm('READY FOR NEXT CARD');controls();}catch(e){state(e.message);}};
+$('auto').onchange=()=>{resetSamples();logEvent('automatic mode',{enabled:$('auto').checked});showRearm($('auto').checked?(held?'CAPTURE LOCKED · Remove card completely':'READY FOR NEXT CARD'):'Manual capture enabled');};
+$('exportDiagnostics').onclick=()=>{const report={version:'0.7.4.4',camera:track()?.label||null,resolution:[v.videoWidth,v.videoHeight],automatic:$('auto').checked,rearms,captureCount:jobs.length,trace};const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-capture-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('resume').onclick=()=>{workerPaused=false;void pump();};v.addEventListener('resize',layout);window.addEventListener('resize',layout);
 window.addEventListener('beforeunload',e=>{if(pendingStore||capturing){e.preventDefault();e.returnValue='';}});
 window.addEventListener('pagehide',()=>{active=false;stop();closeReview();releaseLock?.();});
