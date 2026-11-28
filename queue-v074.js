@@ -77,6 +77,45 @@ function arrivalEvidence(base,gap,sample,previous){
  if(gap)return changedBoth(gap,sample);
  return p.present;
 }
+// Single acquisition state machine. Text is a hint, not a mandatory gate.
+function distance(a,b){
+ const d=exposureDiff(a,b);
+ return Number.isFinite(d.raw)?d.residual+Math.min(d.offset,45)*.2:Infinity;
+}
+function compareZones(a,b){
+ return {art:distance(a?.art,b?.art),id:distance(a?.id,b?.id)};
+}
+function evidence(base,anchor,s,prev){
+ const bg=compareZones(base,s),old=compareZones(anchor,s),ref=compareZones(base,anchor),motion=compareZones(prev,s);
+ const stable=motion.art<9&&motion.id<11;
+ const near=(d,ref,limit)=>d<=limit||Number.isFinite(ref)&&ref>=limit*2&&d<=ref*.50;
+ const departed=old.art>=12||old.id>=10;
+ const empty=near(bg.art,ref.art,10)&&near(bg.id,ref.id,9);
+ const present=(bg.art>=13&&bg.id>=6)||(bg.art>=8&&bg.id>=12);
+ return {bg,old,ref,motion,stable,empty,present,departed,text:!!s.text};
+}
+function cycleStep(old,input){
+ const {base,anchor,sample,now,stamp}=input;
+ if(old?.stamp===stamp)return old;
+ const stage=old?.stage||'search',prev=old&&now-old.last<=900?old.previous:null;
+ const e=evidence(base,anchor,sample,prev);
+ let count=0,since=now,next=stage,action=null,reason='';
+ const consecutive=old&&old.stage===stage&&now-old.last<=900;
+ const progress=()=>{count=consecutive?old.count+1:1;since=consecutive&&old.count?old.since:now;};
+ if(stage==='remove'){
+  // Accept only background-like evidence of a departure. No blind timeout unlock.
+  if(e.empty&&e.departed){progress();reason='Confirming removal';if(count>=2&&now-since>=90){next='search';action='rearm';count=0;reason='Removal confirmed';}}
+  else reason='Waiting for background after card removal';
+ }else{
+  if(!e.empty&&e.present&&e.stable){progress();reason='Card settling';if(count>=2&&now-since>=90){action='capture';count=0;reason='Card ready';}}
+  else reason=e.empty?'Empty surface':!e.present?'Align card over both regions':'Waiting for movement to settle';
+ }
+ return {stage:next,count,since,last:now,stamp,previous:sample,action,reason,e};
+}
+function frameCompatible(anchor,current){
+ const d=compareZones(anchor,current);
+ return d.art<18&&d.id<20;
+}
 function open(){
  return new Promise((resolve,reject)=>{
   const r=indexedDB.open('riftscan-queue-lab-v1',1);
@@ -112,6 +151,6 @@ function finish(db,id,expected,patch){
   };
  });
 }
-const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,changedBoth,gapEvidence,advanceGap,arrivalEvidence,open,list,enqueue,restore,claim,finish,clearHistory};
+const api={LIMIT,MAX_RECORDS,admission,vote,recover,counts,meanDiff,exposureDiff,presence,departure,emptyProgress,changedBoth,gapEvidence,advanceGap,arrivalEvidence,distance,compareZones,evidence,cycleStep,frameCompatible,open,list,enqueue,restore,claim,finish,clearHistory};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.RiftQueue=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
