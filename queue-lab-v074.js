@@ -4,17 +4,18 @@
 const $=id=>document.getElementById(id),Q=RiftQueue,C=RiftCore,v=$('video');
 let db=null,stream=null,epoch=0,opening=false,capturing=false,storing=false,held=false,base=null,previous=null,stable=0,presentSince=0,detectBusy=false;
 let heldAnchor=null,baseGeometry=null,emptyRun=null,lastDetectStamp=null,lastDetectAt=0,rearms=0,arrivalReference=null,arrivalSince=0,cycleStarted=0;
-let jobs=[],storageError='',pendingStore=null,worker=null,processing=false,workerPaused=false,active=true,reviewId=null,reviewURL=null,releaseLock=null;
+let clearing=false, jobs=[],storageError='',pendingStore=null,worker=null,processing=false,workerPaused=false,active=true,reviewId=null,reviewURL=null,releaseLock=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),state=s=>$('state').textContent=s,work=s=>$('workerState').textContent=s;
 const track=()=>stream?.getVideoTracks()[0];
 function controls(){
+ if(clearing){for(const id of ['start','stop','focus','capture','arm','calibrate','auto','retryStore','resume','export','clearHistory'])$(id).disabled=true;return;}
  const camera=!!track()&&!opening,full=Q.admission(jobs,'new-id')==='full';
  $('start').disabled=!db||opening||capturing||!!pendingStore;$('stop').disabled=!stream&&!opening;
  $('focus').disabled=!camera||capturing;$('capture').disabled=!db||!camera||capturing||held||full||!!pendingStore||!!storageError;
  $('arm').disabled=!camera||capturing||!!pendingStore||!held;
  $('calibrate').disabled=!camera||capturing||!!pendingStore;
  $('auto').disabled=!base||!camera||!!pendingStore;$('retryStore').disabled=!pendingStore||capturing||storing;
- $('resume').disabled=!db||processing;$('export').disabled=!db||!jobs.length;
+ $('resume').disabled=!db||processing;$('export').disabled=!db||!jobs.length;$('clearHistory').disabled=!db||opening||capturing||storing||(!jobs.length&&!pendingStore);
 }
 function resetSamples(){previous=null;stable=0;presentSince=0;arrivalSince=0;emptyRun=null;lastDetectStamp=null;lastDetectAt=0;}
 function clearDetection(reason='Not calibrated'){base=null;baseGeometry=null;arrivalReference=null;resetSamples();$('auto').checked=false;$('detect').textContent=reason;$('rearmStatus').textContent='Manual mode · '+reason;}
@@ -125,7 +126,7 @@ async function storePending(){
  finally{storing=false;controls();}
 }
 async function detect(){
- if(detectBusy||!base||!stream||opening||capturing||pendingStore||document.hidden)return;
+ if(clearing||detectBusy||!base||!stream||opening||capturing||pendingStore||document.hidden)return;
  detectBusy=true;
  try{
   if(!geometryMatches(baseGeometry,geometrySignature())){clearDetection('Camera crop changed. Remove card and recalibrate.');controls();return;}
@@ -183,11 +184,11 @@ async function recognize(job,w){
  return {state:verdict.accepted?'saved':'review',result:verdict.accepted?verdict.good[0].parsed:verdict.best?.parsed||null,reads,finish:'review',note:verdict.accepted?'ID confirmed · finish uncertain':verdict.conflict?'Conflicting IDs · review required':'Not enough matching accepted reads'};
 }
 async function pump(){
- if(!db||processing||workerPaused||!active)return;processing=true;controls();
+ if(!db||processing||workerPaused||!active||clearing)return;processing=true;controls();
  try{
-  while(active&&!workerPaused){
+  while(active&&!workerPaused&&!clearing){
    if(!jobs.some(j=>j.state==='queued'))break;
-   work('Loading / preparing OCR worker…');const w=await getWorker();if(!active)break;
+   work('Loading / preparing OCR worker…');const w=await getWorker();if(!active||clearing)break;
    const job=await Q.claim(db);if(!job)break;await refresh();work('Processing '+job.id.slice(0,8)+' · camera remains independent');
    try{const result=await bounded(recognize(job,w),30000,'OCR job');if(!active)return;if(!await Q.finish(db,job.id,'processing',result))throw Error('Job state changed');}
    catch(e){if(!active)return;await Q.finish(db,job.id,'processing',{state:'queued',note:'Processing interrupted: '+e.message});throw e;}
@@ -208,6 +209,7 @@ async function refresh(){
  controls();
 }
 function openReview(id){
+ if(clearing)return;
  const j=jobs.find(x=>x.id===id);if(!j)return;reviewId=id;
  if(reviewURL)URL.revokeObjectURL(reviewURL);reviewURL=URL.createObjectURL(j.images[0]);$('reviewImg').src=reviewURL;
  $('reviewSet').value=j.result?.set||'';$('reviewNum').value=j.result?.num||'';$('reviewFinish').value=j.finish||'review';
@@ -216,6 +218,7 @@ function openReview(id){
 }
 function closeReview(){reviewId=null;$('review').hidden=true;if(reviewURL)URL.revokeObjectURL(reviewURL);reviewURL=null;$('reviewImg').removeAttribute('src');}
 $('confirmReview').onclick=async()=>{
+ if(clearing)return;
  const j=jobs.find(x=>x.id===reviewId);if(!j)return;const set=$('reviewSet').value.trim().toUpperCase(),num=$('reviewNum').value.trim().toLowerCase(),finish=$('reviewFinish').value;
  if(!C.validate(set,num)){ $('reviewStatus').textContent='Enter a 3-letter set and a valid collector number.';return;}
  $('confirmReview').disabled=true;
@@ -223,6 +226,25 @@ $('confirmReview').onclick=async()=>{
  catch(e){$('reviewStatus').textContent=e.message;}finally{$('confirmReview').disabled=false;}
 };
 $('closeReview').onclick=closeReview;
+async function clearScanHistory(){
+ if(!db||clearing||opening||capturing||storing||(!jobs.length&&!pendingStore))return;
+ const count=jobs.length;
+ if(!confirm('Permanently clear all '+count+' stored Queue Lab captures, including saved cards, pending jobs, review images and discarded records?'+(pendingStore?' The unstored capture will also be discarded.':'')+' Your regular RiftScan collection will not be affected.'))return;
+ clearing=true;controls();stop();closeReview();state('Clearing Queue Lab history…');
+ try{
+  await Q.clearHistory(db);
+  // No new acquisition can begin. A late OCR finish only updates an existing
+  // job, so it cannot recreate a deleted capture.
+  active=false;pendingStore=null;jobs=[];held=false;heldAnchor=null;arrivalReference=null;rearms=0;storageError='';
+  $('jobs').replaceChildren();$('stats').textContent='0 captures';$('receipt').textContent='No capture yet';
+  state('History cleared. Restarting Queue Lab…');
+  location.reload();
+ }catch(e){
+  clearing=false;state('Could not clear history: '+e.message+' · Stored captures were not cleared. Camera stopped.');controls();
+  void refresh().then(()=>pump()).catch(()=>{});
+ }
+}
+$('clearHistory').onclick=clearScanHistory;
 $('export').onclick=()=>{const data=jobs.map(({images,art,thumbnail,...j})=>j),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='riftscan-queue-lab.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('start').onclick=start;$('stop').onclick=stop;$('focus').onclick=focus;$('capture').onclick=()=>capture(false);$('retryStore').onclick=storePending;
 $('arm').onclick=()=>{held=false;heldAnchor=null;arrivalReference=null;resetSamples();state('Manually rearmed. Only use after physically replacing the card.');showRearm('READY FOR NEXT CARD · Manual rearm');controls();};
