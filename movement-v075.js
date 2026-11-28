@@ -46,7 +46,7 @@ class Tracker{
   const farAway=away&&Math.min(da,di)>=18;
   // One confident outward match can survive partial occlusion of the other.
   const singleOut=!centered&&((art.error<.32&&da>=18&&(!idOK||fixedId<.32))||(id.error<.32&&di>=18&&(!artOK||fixedArt<.32)));
-  if(centered&&this.lastAway>=18)this.snap=true;
+  if(this.lastAway>=18&&!away&&(centered||artOK&&idOK&&da<cfg.artMove&&di<cfg.idMove))this.snap=true;
   this.lastAway=away?Math.min(da,di):singleOut?Math.max(art.error<.32?da:0,id.error<.32?di:0):0;
   if(away||singleOut){this.moved=true;this.snap=false;}
   if(this.moved&&(bothLost||!coherent&&!centered))this.lost=true;
